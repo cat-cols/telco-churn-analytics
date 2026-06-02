@@ -45,7 +45,7 @@ telco-churn-analytics/
 ### Setup
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/cat-cols/telco-churn-analytics
 cd telco-churn-analytics
 
 # Create virtual environment
