@@ -4,9 +4,9 @@
 
 ### Raw Data Schema
 
-**File**: `customer_churn_dataset-training-master.csv`  
-**Format**: CSV  
-**Encoding**: UTF-8  
+**File**: `customer_churn_dataset-training-master.csv`
+**Format**: CSV
+**Encoding**: UTF-8
 **Delimiter**: Comma (`,`)
 
 ### Column Specifications
@@ -28,8 +28,8 @@
 
 ### Processed Data Schema
 
-**File**: `train.parquet`, `test.parquet`  
-**Format**: Apache Parquet  
+**File**: `train.parquet`, `test.parquet`
+**Format**: Apache Parquet
 **Compression**: Snappy (default)
 
 #### Processed Features
@@ -56,11 +56,11 @@
 
 ### Preprocessing Objects
 
-**Scaler**: StandardScaler  
+**Scaler**: StandardScaler
 - Parameters: mean and standard deviation from training data
 - File: `scaler.pkl`
 
-**Encoder**: OneHotEncoder  
+**Encoder**: OneHotEncoder
 - Parameters: category mappings from training data
 - File: `encoder.pkl`
 
@@ -84,7 +84,7 @@ Customer (1) ────── (N) Usage Events
 
 ### Schema Evolution
 
-**Version**: 1.0  
+**Version**: 1.0
 **Last Updated**: 2024
 
 Changes from raw to processed:
