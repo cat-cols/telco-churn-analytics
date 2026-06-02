@@ -1,0 +1,27 @@
+{
+  "include": [
+    "**/*.py",
+    "**/*.ipynb"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/node_modules",
+    "**/venv",
+    "**/env",
+    "**/.git",
+    "**/runs",
+    "**/reports",
+    "**/*.csv",
+    "**/*.json",
+    "**/data",
+    "**/*.parquet",
+    "**/checkpoints"
+  ],
+  "ignore": [
+    "**/generated",
+    "**/cache"
+  ],
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
+}
