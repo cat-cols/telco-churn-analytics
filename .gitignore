@@ -132,7 +132,6 @@ Thumbs.db
 # ============================================================
 # Personal-notes
 # ============================================================
-# notes/
+notes/
 models/*.pkl
 sample_predictions.csv
-archive/
