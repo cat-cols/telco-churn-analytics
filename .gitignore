@@ -135,3 +135,4 @@ Thumbs.db
 # notes/
 models/*.pkl
 sample_predictions.csv
+archive/
