@@ -48,7 +48,7 @@ pip install -r requirements.txt
 The IBM Telco Customer Churn dataset should be placed in the `data/` directory.
 
 **Dataset Details:**
-- **File Name**: `customer_churn_dataset-training-master.csv`
+- **File Name**: `telco_customer_churn.csv`
 - **Source**: IBM Telco Customer Churn Dataset
 - **Format**: CSV
 - **Size**: 440,832 records × 12 features
@@ -58,8 +58,8 @@ The IBM Telco Customer Churn dataset should be placed in the `data/` directory.
 **Option 1: Download from IBM**
 1. Visit the IBM dataset source or Kaggle
 2. Download the IBM Telco Customer Churn dataset
-3. Rename the file to `customer_churn_dataset-training-master.csv`
-4. Place it in the `data/` directory
+3. Rename the file to `telco_customer_churn.csv`
+4. Place it in the `data/raw/` directory
 
 **Option 2: Using Kaggle (if available)**
 ```bash
@@ -74,7 +74,8 @@ kaggle datasets download -d <dataset-name>
 **Expected File Structure:**
 ```
 data/
-└── customer_churn_dataset-training-master.csv
+└── raw/
+    └── telco_customer_churn.csv
 ```
 
 For more details about the dataset, see [data_source.md](data_source.md).

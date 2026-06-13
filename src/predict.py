@@ -33,25 +33,31 @@ def preprocess_new_data(data: pd.DataFrame, scaler, encoder) -> pd.DataFrame:
     """Preprocess new data for prediction."""
     logger.info(f"Preprocessing new data with shape: {data.shape}")
     
+    # Clean data - handle TotalCharges conversion and missing values
+    data_clean = data.copy()
+    data_clean['TotalCharges'] = pd.to_numeric(data_clean['TotalCharges'], errors='coerce')
+    data_clean = data_clean.dropna()
+    logger.info(f"Cleaned data shape: {data_clean.shape}")
+    
     # Scale numerical features
-    numerical_data = scaler.transform(data[NUMERICAL_COLUMNS])
+    numerical_data = scaler.transform(data_clean[NUMERICAL_COLUMNS])
     numerical_df = pd.DataFrame(
         data=numerical_data,
-        index=data.index,
+        index=data_clean.index,
         columns=NUMERICAL_COLUMNS
     )
     
     # Encode categorical features
-    categorical_data = encoder.transform(data[CATEGORICAL_COLUMNS])
+    categorical_data = encoder.transform(data_clean[CATEGORICAL_COLUMNS])
     categorical_df = pd.DataFrame(
         data=categorical_data,
-        index=data.index,
+        index=data_clean.index,
         columns=encoder.get_feature_names_out()
     )
     
     # Combine features
     processed_data = pd.concat([
-        data[IDENTIFIER_COLUMN],
+        data_clean[IDENTIFIER_COLUMN],
         numerical_df,
         categorical_df
     ], axis=1)
@@ -73,9 +79,9 @@ def predict(data: pd.DataFrame, model, scaler, encoder, threshold: float = 0.5) 
     predictions = model.predict(features)
     probabilities = model.predict_proba(features)[:, 1]
     
-    # Create results dataframe
+    # Create results dataframe using the cleaned data
     results = pd.DataFrame({
-        'CustomerID': data[IDENTIFIER_COLUMN],
+        'CustomerID': processed_data[IDENTIFIER_COLUMN],
         'Churn_Probability': probabilities,
         'Predicted_Churn': (probabilities >= threshold).astype(int)
     })

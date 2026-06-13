@@ -25,7 +25,7 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     logger.info("=" * 60)
     logger.info("STARTING END-TO-END PIPELINE")
     logger.info("=" * 60)
-    
+
     # Step 1: Preprocessing
     if not skip_preprocessing:
         logger.info("\n[STEP 1/3] DATA PREPROCESSING")
@@ -34,7 +34,7 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
         logger.info("✓ Preprocessing completed")
     else:
         logger.info("\n[STEP 1/3] SKIPPING PREPROCESSING (using existing data)")
-    
+
     # Step 2: Model Training
     if not skip_training:
         logger.info("\n[STEP 2/3] MODEL TRAINING")
@@ -45,18 +45,18 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
         logger.info("\n[STEP 2/3] SKIPPING TRAINING (using existing model)")
         best_model = load_pickle(MODELS_DIR / "best_model.pkl")
         results_df = pd.read_csv(RESULTS_FILE)
-    
+
     # Step 3: Generate Predictions on Test Set
     logger.info("\n[STEP 3/3] GENERATING PREDICTIONS")
     logger.info("-" * 60)
-    
+
     X_test = load_parquet(PROCESSED_DATA_DIR / "test.parquet")
     y_test = load_parquet(PROCESSED_DATA_DIR / "test_labels.parquet").squeeze()
-    
+
     X_test_features = X_test.drop(columns=[IDENTIFIER_COLUMN])
     y_pred = best_model.predict(X_test_features)
     y_proba = best_model.predict_proba(X_test_features)[:, 1]
-    
+
     # Create predictions dataframe
     predictions_df = pd.DataFrame({
         'CustomerID': X_test[IDENTIFIER_COLUMN],
@@ -64,11 +64,11 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
         'Predicted_Churn': y_pred,
         'Churn_Probability': y_proba
     })
-    
+
     # Save predictions
     predictions_df.to_csv(RESULTS_DIR / 'test_predictions.csv', index=False)
     logger.info(f"✓ Predictions saved to {RESULTS_DIR / 'test_predictions.csv'}")
-    
+
     # Print summary
     logger.info("\n" + "=" * 60)
     logger.info("PIPELINE COMPLETED SUCCESSFULLY")
@@ -79,13 +79,13 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     logger.info(f"  Precision: {results_df['precision'].max():.4f}")
     logger.info(f"  Recall: {results_df['recall'].max():.4f}")
     logger.info(f"  F1-Score: {results_df['f1'].max():.4f}")
-    
+
     logger.info(f"\nGenerated Files:")
     logger.info(f"  - Processed data: {PROCESSED_DATA_DIR}")
     logger.info(f"  - Trained models: {MODELS_DIR}")
     logger.info(f"  - Results: {RESULTS_DIR / 'test_predictions.csv'}")
     logger.info(f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}")
-    
+
     return best_model, results_df, predictions_df
 
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
                         help='Skip preprocessing step (use existing processed data)')
     parser.add_argument('--skip-training', action='store_true',
                         help='Skip training step (use existing model)')
-    
+
     args = parser.parse_args()
-    
+
     run_full_pipeline(skip_preprocessing=args.skip_preprocessing, skip_training=args.skip_training)

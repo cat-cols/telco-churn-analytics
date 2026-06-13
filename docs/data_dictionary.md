@@ -5,9 +5,9 @@ This document describes the IBM Telco Customer Churn dataset, including all colu
 
 ## Dataset Information
 - **Source**: IBM Telco Customer Churn Dataset
-- **Total Records**: 440,832 (after cleaning)
+- **Total Records**: 7,043
 - **Target Variable**: Churn (binary classification)
-- **File Format**: CSV/Excel
+- **File Format**: CSV
 
 ## Feature Description
 
@@ -15,74 +15,96 @@ This document describes the IBM Telco Customer Churn dataset, including all colu
 
 | Column Name | Data Type | Description | Range/Values |
 |-------------|-----------|-------------|--------------|
-| CustomerID | float64 | Unique identifier for each customer | Numeric (2 - 449,999) |
-| Age | float64 | Customer age in years | 18 - 65 |
-| Gender | object | Customer gender | Male, Female |
-| Tenure | float64 | Number of months the customer has been with the company | 1 - 60 months |
+| customerID | str | Unique identifier for each customer | String (e.g., "7590-VHVEG") |
+| gender | str | Customer gender | Male, Female |
+| SeniorCitizen | int64 | Whether the customer is a senior citizen | 0 (No), 1 (Yes) |
+| Partner | str | Whether the customer has a partner | Yes, No |
+| Dependents | str | Whether the customer has dependents | Yes, No |
 
-### Usage Behavior
-
-| Column Name | Data Type | Description | Range/Values |
-|-------------|-----------|-------------|--------------|
-| Usage Frequency | float64 | How frequently the customer uses the service | 1 - 30 |
-| Support Calls | float64 | Number of customer support calls made | 0 - 10 |
-| Payment Delay | float64 | Number of days payment was delayed | 0 - 30 days |
-| Last Interaction | float64 | Days since last customer interaction | 1 - 30 days |
-
-### Subscription Details
+### Service Information
 
 | Column Name | Data Type | Description | Range/Values |
 |-------------|-----------|-------------|--------------|
-| Subscription Type | object | Type of subscription plan | Basic, Standard, Premium |
-| Contract Length | object | Duration of contract | Monthly, Quarterly, Annual |
-| Total Spend | float64 | Total amount spent by customer | $100 - $1,000 |
+| tenure | int64 | Number of months the customer has been with the company | 0 - 72 months |
+| PhoneService | str | Whether the customer has phone service | Yes, No |
+| MultipleLines | str | Whether the customer has multiple lines | Yes, No, No phone service |
+| InternetService | str | Type of internet service | DSL, Fiber optic, No |
+| OnlineSecurity | str | Whether the customer has online security | Yes, No, No internet service |
+| OnlineBackup | str | Whether the customer has online backup | Yes, No, No internet service |
+| DeviceProtection | str | Whether the customer has device protection | Yes, No, No internet service |
+| TechSupport | str | Whether the customer has tech support | Yes, No, No internet service |
+| StreamingTV | str | Whether the customer has streaming TV | Yes, No, No internet service |
+| StreamingMovies | str | Whether the customer has streaming movies | Yes, No, No internet service |
+
+### Account Information
+
+| Column Name | Data Type | Description | Range/Values |
+|-------------|-----------|-------------|--------------|
+| Contract | str | Contract type | Month-to-month, One year, Two year |
+| PaperlessBilling | str | Whether the customer has paperless billing | Yes, No |
+| PaymentMethod | str | Payment method | Electronic check, Mailed check, Bank transfer (automatic), Credit card (automatic) |
+| MonthlyCharges | float64 | Monthly charges amount | $18.25 - $118.75 |
+| TotalCharges | str | Total charges amount (stored as string) | String (needs conversion to numeric) |
 
 ### Target Variable
 
 | Column Name | Data Type | Description | Range/Values |
 |-------------|-----------|-------------|--------------|
-| Churn | float64 | Whether the customer churned (1) or not (0) | 0 (No), 1 (Yes) |
+| Churn | str | Whether the customer churned | Yes, No |
 
 ## Data Quality Notes
 
 ### Missing Values
-- Original dataset contained 1 row with all null values (row index 199,295)
-- This row was removed during data cleaning
-- Final dataset: 440,832 complete records with no missing values
+- No missing values in the dataset
+- TotalCharges is stored as string and may need conversion to numeric
+- Some TotalCharges values may be empty strings for new customers
 
 ### Data Distribution
 
 #### Categorical Variables
-- **Subscription Type**: Balanced distribution (~33% each for Basic, Standard, Premium)
-- **Contract Length**: Annual (40.2%), Quarterly (40.0%), Monthly (19.8%)
-- **Gender**: Mixed distribution (specific percentages available in EDA)
+- **gender**: Approximately balanced
+- **SeniorCitizen**: 16.2% are senior citizens
+- **Partner**: 48.3% have partners
+- **Dependents**: 30.0% have dependents
+- **Contract**: Month-to-month (55%), One year (21%), Two year (24%)
+- **PaymentMethod**: Electronic check (33.6%), Mailed check (22.8%), Bank transfer (21.9%), Credit card (21.6%)
 
 #### Numerical Variables
-- **Age**: Mean 39.4 years, Std 12.4
-- **Tenure**: Mean 31.3 months, Std 17.3
-- **Total Spend**: Mean $631.6, Std $240.8
-- **Churn Rate**: 56.7% (imbalanced dataset)
+- **tenure**: Mean 32.4 months, Std 24.6
+- **MonthlyCharges**: Mean $64.76, Std $30.09
+- **Churn Rate**: 26.5% (imbalanced dataset)
 
 ## Feature Categories
 
 ### Numerical Features (StandardScaler Applied)
-- Age
-- Tenure
-- Usage Frequency
-- Support Calls
-- Payment Delay
-- Total Spend
-- Last Interaction
+- SeniorCitizen
+- tenure
+- MonthlyCharges
+- TotalCharges (after string conversion)
 
 ### Categorical Features (OneHotEncoder Applied)
-- Subscription Type
-- Contract Length
+- gender
+- Partner
+- Dependents
+- PhoneService
+- MultipleLines
+- InternetService
+- OnlineSecurity
+- OnlineBackup
+- DeviceProtection
+- TechSupport
+- StreamingTV
+- StreamingMovies
+- Contract
+- PaperlessBilling
+- PaymentMethod
 
 ### Identifier
-- CustomerID (used for tracking, not in modeling)
+- customerID (used for tracking, not in modeling)
 
 ## Preprocessing Applied
-1. **Null Handling**: Removed single row with all null values
+1. **String Conversion**: TotalCharges converted from string to numeric
 2. **Train/Test Split**: 80% training, 20% testing (random_state=42)
 3. **Numerical Scaling**: StandardScaler (mean=0, std=1)
 4. **Categorical Encoding**: OneHotEncoder (binary columns for each category)
+5. **Target Encoding**: Churn converted to binary (Yes=1, No=0)

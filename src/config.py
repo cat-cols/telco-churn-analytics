@@ -18,17 +18,21 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Data configuration
-DATA_PATH = RAW_DATA_DIR / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
+DATA_PATH = RAW_DATA_DIR / "telco_customer_churn.csv"
 
 # Feature configuration
 NUMERICAL_COLUMNS = [
-    'Age', 'Tenure', 'Usage Frequency', 'Support Calls',
-    'Payment Delay', 'Total Spend', 'Last Interaction'
+    'SeniorCitizen', 'tenure', 'MonthlyCharges', 'TotalCharges'
 ]
 
-CATEGORICAL_COLUMNS = ['Subscription Type', 'Contract Length']
+CATEGORICAL_COLUMNS = [
+    'gender', 'Partner', 'Dependents', 'PhoneService', 'MultipleLines',
+    'InternetService', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection',
+    'TechSupport', 'StreamingTV', 'StreamingMovies', 'Contract',
+    'PaperlessBilling', 'PaymentMethod'
+]
 
-IDENTIFIER_COLUMN = 'CustomerID'
+IDENTIFIER_COLUMN = 'customerID'
 TARGET_COLUMN = 'Churn'
 
 # Model configuration

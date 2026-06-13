@@ -18,6 +18,7 @@ All notable changes to the Telco Churn Analytics project will be documented in t
 ### Changed
 - Fixed data path configuration to point to correct dataset location
 - Updated README.md with accurate project information
+- Fixed churn rate calculation in 01_eda.ipynb by adding ChurnNumeric column before groupby operation
 
 ## [Future Plans]
 - Add hyperparameter tuning capabilities

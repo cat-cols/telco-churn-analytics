@@ -55,16 +55,26 @@ def evaluate_model(model, X_test, y_test) -> dict:
     y_pred = model.predict(X_test)
     
     if hasattr(model, 'predict_proba'):
-        y_proba = model.predict_proba(X_test)[:, 1]
+        # Get probability of positive class (Yes)
+        classes = model.classes_
+        if 'Yes' in classes:
+            yes_index = list(classes).index('Yes')
+            y_proba = model.predict_proba(X_test)[:, yes_index]
+        else:
+            y_proba = (y_pred == 'Yes').astype(int)
     else:
-        y_proba = y_pred
+        y_proba = (y_pred == 'Yes').astype(int)
+    
+    # Convert string labels to binary for metrics calculation
+    y_test_binary = (y_test == 'Yes').astype(int)
+    y_pred_binary = (y_pred == 'Yes').astype(int)
     
     metrics = {
-        'accuracy': accuracy_score(y_test, y_pred),
-        'precision': precision_score(y_test, y_pred),
-        'recall': recall_score(y_test, y_pred),
-        'f1': f1_score(y_test, y_pred),
-        'roc_auc': roc_auc_score(y_test, y_proba)
+        'accuracy': accuracy_score(y_test_binary, y_pred_binary),
+        'precision': precision_score(y_test_binary, y_pred_binary),
+        'recall': recall_score(y_test_binary, y_pred_binary),
+        'f1': f1_score(y_test_binary, y_pred_binary),
+        'roc_auc': roc_auc_score(y_test_binary, y_proba)
     }
     
     return metrics
