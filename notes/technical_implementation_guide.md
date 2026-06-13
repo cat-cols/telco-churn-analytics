@@ -7,6 +7,10 @@
 4. [Model Selection Strategy](#model-selection-strategy)
 5. [Implementation: Building Each Component](#implementation-building-each-component)
 6. [Evaluation Framework](#evaluation-framework)
+7. [Dataset Schema Validation](#dataset-schema-validation)
+8. [Testing](#testing)
+9. [Artifact Lifecycle Management](#artifact-lifecycle-management)
+10. [Class Imbalance, Hyperparameter Tuning, and Threshold Analysis](#class-imbalance-hyperparameter-tuning-and-threshold-analysis)
 
 ---
 
@@ -1524,6 +1528,641 @@ python src/run_pipeline.py --skip-training
 # Predict on new data
 python src/predict.py --input data/new_customers.csv --output predictions.csv --threshold 0.5
 ```
+
+---
+
+## Dataset Schema Validation
+
+### Why Validate the Schema?
+
+The preprocessing pipeline silently produces wrong results if the input data changes shape. For example:
+
+- A column gets renamed upstream (`MonthlyCharge` instead of `MonthlyCharges`) → scaler throws a `KeyError` mid-pipeline
+- An ETL job writes `SeniorCitizen` as `"0"`/`"1"` strings instead of integers → downstream one-hot encoding silently treats it as categorical
+- A daily export contains only today's records (50 rows) instead of the full dataset → model trains on a non-representative sample with no warning
+
+Catching these **at load time** — before any transformation — means the pipeline fails loudly with a clear message instead of silently producing bad artifacts.
+
+### The Three Checks
+
+#### 1. Required Columns
+
+```python
+required_columns = set(NUMERICAL_COLUMNS + CATEGORICAL_COLUMNS + [IDENTIFIER_COLUMN, TARGET_COLUMN])
+missing = required_columns - set(data.columns)
+if missing:
+    errors.append(f"Missing required columns: {sorted(missing)}")
+```
+
+Compares the full set of columns the pipeline expects (sourced from `config.py`) against what the CSV actually contains. Using `set` difference means extra columns in the data are ignored — only missing ones are flagged. Sorting the output makes the error message deterministic.
+
+**When this fires:** Column was renamed, dropped, or the wrong file was passed as input.
+
+#### 2. Minimum Row Count
+
+```python
+MIN_EXPECTED_ROWS = 100
+
+if len(data) < MIN_EXPECTED_ROWS:
+    errors.append(f"Dataset has only {len(data)} rows (expected >= {MIN_EXPECTED_ROWS})")
+```
+
+Guards against accidentally passing a sample file, an empty export, or a truncated download. The threshold (`100`) is intentionally conservative — the real dataset has 7,043 rows. Adjust `MIN_EXPECTED_ROWS` in `preprocess.py` if the dataset size is expected to change.
+
+**When this fires:** Wrong file path, partial export, or test fixture accidentally used in production.
+
+#### 3. Key Column Dtypes
+
+```python
+EXPECTED_DTYPES: dict[str, str] = {
+    'SeniorCitizen': 'int64',
+    'tenure': 'int64',
+    'MonthlyCharges': 'float64',
+}
+
+for col, expected_dtype in EXPECTED_DTYPES.items():
+    if col in data.columns and str(data[col].dtype) != expected_dtype:
+        errors.append(
+            f"Column '{col}' has dtype '{data[col].dtype}', expected '{expected_dtype}'"
+        )
+```
+
+Only the columns most likely to be silently mistyped are checked here — not all 21. The rationale:
+
+| Column | Expected dtype | Risk if wrong |
+|---|---|---|
+| `SeniorCitizen` | `int64` | Treated as categorical, inflates feature space |
+| `tenure` | `int64` | Scaler produces wrong mean/std if read as string |
+| `MonthlyCharges` | `float64` | Comparison errors if read as object |
+
+`TotalCharges` is intentionally excluded — it is **known** to arrive as `object` (string) from the CSV and is converted to numeric explicitly as the first preprocessing step.
+
+**When this fires:** Source system changes column format (e.g. adds currency symbols, changes integer to string encoding).
+
+### Design Decisions
+
+**Collect all errors before raising** — the function accumulates all failures into a list and raises once at the end. This means you see every problem in a single run rather than fixing one issue, re-running, and finding the next.
+
+```python
+if errors:
+    raise ValueError("Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
+```
+
+**Raise `ValueError`, not `AssertionError`** — `assert` statements are disabled when Python runs with the `-O` (optimise) flag. `ValueError` always fires and is the conventional exception for bad input data.
+
+**Don't validate after transformation** — `validate_schema` is called on the raw loaded DataFrame, before `TotalCharges` is coerced, before `dropna`, before any splits. This ensures the check reflects what was actually in the file.
+
+### Where It Lives in the Pipeline
+
+```
+load_data(DATA_PATH)
+    ↓
+validate_schema(data)       ← fails fast here if data is malformed
+    ↓
+pd.to_numeric(TotalCharges)
+    ↓
+dropna()
+    ↓
+train_test_split()
+    ↓
+fit / transform / save
+```
+
+### Adding New Checks
+
+To extend validation, add to the `errors` list inside `validate_schema` before the final `if errors` raise:
+
+```python
+# Example: warn if churn rate is implausibly low or high
+if TARGET_COLUMN in data.columns:
+    churn_rate = (data[TARGET_COLUMN] == 'Yes').mean()
+    if not (0.05 <= churn_rate <= 0.60):
+        errors.append(f"Churn rate {churn_rate:.1%} is outside expected range [5%, 60%]")
+```
+
+---
+
+## Testing
+
+### Why Write Tests at This Stage?
+
+Tests are written after the pipeline is stable because at that point you know:
+- Which functions exist and what their contracts are
+- Which failure modes have already been encountered (the debugging log is your test specification)
+- What "correct behaviour" looks like (you've run the pipeline and seen real output)
+
+Writing tests too early — before the code stabilises — means constantly rewriting them as the API changes. Writing them too late means you've already shipped bugs you can't detect.
+
+### The Three Test Files
+
+The test suite is split into three files by scope:
+
+| File | Scope | Runs without | Speed |
+|---|---|---|---|
+| `tests/test_predict.py` | Unit — individual functions in `predict.py` | Model artifacts | Fast |
+| `tests/test_preprocess.py` | Unit — individual functions in `preprocess.py` | Model artifacts, raw data | Fast |
+| `tests/test_integration.py` | Integration — full `predict_from_file` call | Nothing (needs artifacts) | Slow |
+
+**Why separate unit from integration?** Unit tests should run in milliseconds with no filesystem dependencies. Integration tests can take seconds and require the full artifact chain to be in place. Keeping them separate means you can run `pytest tests/test_predict.py tests/test_preprocess.py` quickly during development without needing the model loaded.
+
+---
+
+### Thinking Process: How to Identify What to Test
+
+The starting point is the debugging log — every runtime bug that was fixed is a test waiting to be written. If a bug happened once, it can happen again after a refactor.
+
+**Step 1: List every function that has had a bug or handles an edge case.**
+
+From the debugging log and code review:
+- `validate_input_data` — had TypeError on string TotalCharges (fix #1)
+- `handle_unseen_categories` — had ValueError from set() vs list() (fix #3)
+- `handle_new_customers` — core business logic, no test coverage
+- `validate_schema` — brand new function, untested
+- `preprocess_new_data` — feature order must match training exactly
+
+**Step 2: For each function, ask: what inputs would break it, and what outputs must always be true?**
+
+This produces two kinds of tests:
+- **Regression tests** — prove a previously broken input now works
+- **Contract tests** — prove the function's output always has certain properties
+
+**Step 3: Write the simplest possible input that exercises the behaviour.**
+
+Don't use the full 7,043-row dataset in unit tests. Build a minimal DataFrame with exactly the rows needed — 2–5 rows is usually enough. This makes tests fast, readable, and independent of the data file.
+
+---
+
+### Test Fixture Strategy
+
+The fixture at `tests/fixtures/sample_customers.csv` serves the integration test and any unit test that needs a realistic full-row input. It is hand-crafted (not sampled from the real data) so it:
+
+1. **Covers every edge case in one file** — one normal row, one new customer (tenure=0), one row with a missing value, one with an unseen category, one with an out-of-range value
+2. **Is committed to git** — unlike the real data which is gitignored, this small fixture is tracked so tests always run in CI
+3. **Is deterministic** — same input always produces same output, making assertions reliable
+
+The fixture has exactly 10 rows: a mix of normal cases and edge cases, all with the full column set required by `config.py`.
+
+---
+
+### Anatomy of a Unit Test
+
+```python
+import pandas as pd
+import pytest
+import sys, pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / 'src'))
+
+from predict import handle_new_customers
+
+def test_handle_new_customers_sets_total_charges_to_zero():
+    # Arrange — minimal DataFrame with exactly what the function needs
+    data = pd.DataFrame({
+        'customerID': ['A001', 'A002'],
+        'tenure':     [0,      12   ],
+        'TotalCharges': [' ',  '450.0'],
+        'MonthlyCharges': [29.85, 37.50],
+    })
+
+    # Act
+    result = handle_new_customers(data)
+
+    # Assert — one specific, falsifiable claim
+    assert result.loc[result['tenure'] == 0, 'TotalCharges'].iloc[0] == 0
+    assert result.loc[result['tenure'] == 12, 'TotalCharges'].iloc[0] == '450.0'
+```
+
+**Arrange / Act / Assert** is the standard pattern:
+- **Arrange** — build the minimum input to exercise the behaviour
+- **Act** — call exactly one function
+- **Assert** — make one or two specific claims about the output
+
+Avoid asserting everything. One focused assertion per test makes it immediately clear what broke when a test fails.
+
+---
+
+### Anatomy of a Regression Test
+
+A regression test proves a previously broken input no longer breaks the code.
+
+```python
+def test_validate_input_data_handles_string_total_charges():
+    """Regression for fix #1 — TypeError when TotalCharges is string dtype."""
+    data = pd.DataFrame({
+        'customerID':    ['A001'],
+        'tenure':        [12],
+        'MonthlyCharges': [50.0],
+        'TotalCharges':  ['600.0'],   # <-- string, not float
+        # ... all required columns ...
+    })
+
+    # Must not raise TypeError
+    is_valid, errors = validate_input_data(data)
+
+    # TotalCharges='600.0' is within range [0, 15000] — should pass
+    assert is_valid is True
+```
+
+The docstring references the fix number. When this test fails in the future, the reader immediately knows where to look in the debugging log for context.
+
+---
+
+### Anatomy of an Integration Test
+
+```python
+def test_predict_from_file_produces_valid_output(tmp_path):
+    """Full pipeline: raw CSV in → predictions CSV out."""
+    input_file = pathlib.Path('tests/fixtures/sample_customers.csv')
+    output_file = tmp_path / 'predictions.csv'
+
+    predict_from_file(str(input_file), str(output_file))
+
+    result = pd.read_csv(output_file)
+
+    # Schema assertions
+    assert 'CustomerID' in result.columns
+    assert 'Churn_Probability' in result.columns
+    assert 'Predicted_Churn' in result.columns
+    assert 'Risk_Level' in result.columns
+
+    # Value range assertions
+    assert result['Churn_Probability'].between(0, 1).all()
+    assert result['Predicted_Churn'].isin([0, 1]).all()
+    assert result['Risk_Level'].isin(['Low', 'Medium', 'High']).all()
+```
+
+`tmp_path` is a pytest built-in fixture that creates a temporary directory for the test — output files written here are automatically cleaned up after the test run.
+
+---
+
+### pytest Configuration
+
+pytest is configured in `pyproject.toml` rather than a separate `pytest.ini` to keep configuration in one file:
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+```
+
+- `testpaths` — tells pytest where to look for tests (avoids it scanning the whole project)
+- `pythonpath` — adds `src/` to `sys.path` so test files can `import predict` without path manipulation
+
+With this in place, running the full suite is simply:
+
+```bash
+pytest
+```
+
+And running only unit tests (fast, no artifacts needed):
+
+```bash
+pytest tests/test_predict.py tests/test_preprocess.py -v
+```
+
+---
+
+### What Not to Test
+
+- **`load_data`, `save_pickle`, `load_pickle`** — these are thin wrappers around stdlib/pandas I/O. Testing them means testing pandas, not your code.
+- **Model accuracy** — whether ROC-AUC is above a threshold is a monitoring concern, not a unit test concern. It changes with every retrain.
+- **Exact prediction values** — the model output will change when artifacts are regenerated. Assert output *shape and schema*, not specific probabilities.
+
+---
+
+## Artifact Lifecycle Management
+
+### The Problem: Code Changes Don't Automatically Update Artifacts
+
+The preprocessing and training scripts produce serialised artifacts — `encoder.pkl`, `scaler.pkl`, `best_model.pkl` — that are saved to disk and loaded at inference time. These artifacts are snapshots of fitted objects taken at a specific point in time.
+
+This creates a class of silent failure: **code changes to `preprocess.py` or `train.py` do not automatically propagate into the saved artifacts.** The pipeline will continue running using the old fitted objects until someone explicitly regenerates them.
+
+This project hit this exact issue. Fix #2 added `handle_unknown='ignore'` to the `OneHotEncoder` initialisation in `preprocess.py`:
+
+```python
+# Fix #2: handle_unknown='ignore' — encoder raised ValueError on unseen categories
+encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+```
+
+The source code was correct from that point forward. But the artifact on disk was unchanged:
+
+```python
+# Checking the stored artifact revealed the old setting was still in place
+import pickle
+enc = pickle.load(open('data/processed/encoder.pkl', 'rb'))
+print(enc.handle_unknown)  # → 'error'  ← stale
+```
+
+This meant the production prediction pipeline would still raise `ValueError` on any unseen category, despite the code appearing to be fixed.
+
+---
+
+### How to Detect Stale Artifacts
+
+There is no automatic detection — you have to check deliberately. The three approaches from cheapest to most thorough:
+
+**1. Inspect the artifact directly**
+
+Load the artifact and check its parameters against what the current source code configures:
+
+```python
+import pickle
+enc = pickle.load(open('data/processed/encoder.pkl', 'rb'))
+print(enc.handle_unknown)   # should be 'ignore'
+print(enc.sparse_output)    # should be False
+
+scaler = pickle.load(open('data/processed/scaler.pkl', 'rb'))
+print(scaler.feature_names_in_)  # should match current NUMERICAL_COLUMNS
+```
+
+**2. Check artifact modification timestamps against source file timestamps**
+
+If `encoder.pkl` is older than `preprocess.py`, the artifact predates the latest code change:
+
+```bash
+ls -lt data/processed/encoder.pkl src/preprocess.py
+```
+
+**3. Run the integration tests**
+
+`tests/test_integration.py` exercises the full `predict_from_file` pipeline end-to-end on the fixture. If artifacts are stale in a way that causes runtime failures, integration tests will catch it:
+
+```bash
+.venv/bin/python -m pytest tests/test_integration.py -v
+```
+
+---
+
+### When to Regenerate Artifacts
+
+Regeneration is required whenever any of the following change:
+
+| Change | Affected artifacts |
+|---|---|
+| Column list in `config.py` (`NUMERICAL_COLUMNS`, `CATEGORICAL_COLUMNS`) | `scaler.pkl`, `encoder.pkl`, all `.parquet` splits |
+| `StandardScaler` or `OneHotEncoder` constructor arguments in `preprocess.py` | `scaler.pkl`, `encoder.pkl` |
+| Imputation logic or `dropna` behaviour in `preprocess.py` | All `.parquet` splits, `scaler.pkl`, `encoder.pkl` |
+| `train_test_split` parameters (`test_size`, `random_state`) | All `.parquet` splits, `best_model.pkl` |
+| Model hyperparameters in `MODEL_CONFIGS` in `config.py` | `best_model.pkl`, `model_comparison_results.csv` |
+| Raw dataset replaced or updated | Everything |
+
+Changes that do **not** require regeneration: docstrings, logging messages, `predict.py` edge case handling, test files, documentation.
+
+---
+
+### How to Regenerate
+
+The full pipeline is orchestrated by a single command:
+
+```bash
+python3 src/run_pipeline.py
+```
+
+This runs all three stages in order:
+
+1. **Preprocessing** (`src/preprocess.py`) — validates schema, scales, encodes, saves `.parquet` splits and `.pkl` artifacts
+2. **Training** (`src/train.py`) — fits LR, RF, GB; selects best by ROC-AUC; saves `best_model.pkl`
+3. **Prediction** (`src/run_pipeline.py`) — generates `results/test_predictions.csv` on the test split
+
+To skip a stage (e.g. retraining only after preprocessing is already fresh):
+
+```bash
+python3 src/run_pipeline.py --skip-preprocessing
+python3 src/run_pipeline.py --skip-preprocessing --skip-training  # predictions only
+```
+
+---
+
+### Verifying the Regeneration Succeeded
+
+After running the pipeline, confirm the key artifact parameters match the current source:
+
+```bash
+.venv/bin/python -c "
+import pickle
+enc = pickle.load(open('data/processed/encoder.pkl', 'rb'))
+print('encoder handle_unknown:', enc.handle_unknown)   # expect: ignore
+
+scaler = pickle.load(open('data/processed/scaler.pkl', 'rb'))
+print('scaler n_features:', scaler.n_features_in_)     # expect: 3
+
+model = pickle.load(open('models/best_model.pkl', 'rb'))
+print('model type:', type(model).__name__)
+"
+```
+
+Expected output after this project's regeneration run:
+
+```
+encoder handle_unknown: ignore
+scaler n_features: 3
+model type: GradientBoostingClassifier
+```
+
+Then run the unit and integration tests to confirm the full pipeline is coherent:
+
+```bash
+.venv/bin/python -m pytest -v
+```
+
+---
+
+### Thought Process: Why This Is Easy to Miss
+
+The root cause is that `.pkl` files are gitignored. They exist only on the local filesystem and are not versioned alongside the source code that produces them. This decoupling is intentional — model artifacts can be large and change frequently — but it means:
+
+- A new contributor who clones the repo and runs `predict.py` without first running the pipeline will get an error or, worse, silently wrong results from a stale artifact
+- A code review of `preprocess.py` will look correct even if the artifact on disk doesn't match
+
+**Long-term mitigations** (documented here for future reference, not yet implemented):
+- Add artifact parameter assertions to `load_model_and_preprocessors()` in `predict.py` — fail fast if loaded encoder has `handle_unknown='error'`
+- Tag artifact filenames with a hash or timestamp: `encoder_20260613.pkl` so staleness is visible
+- Add a CI step that regenerates artifacts from scratch and runs the full test suite on every push to `main`
+
+---
+
+## Class Imbalance, Hyperparameter Tuning, and Threshold Analysis
+
+### The Problem: Low Recall at Default Threshold
+
+The baseline models trained with default settings produced a Gradient Boosting model with ROC-AUC of **0.8340** but recall of only **0.500** — meaning half of all actual churners were missed. In a churn prediction context this is costly: a missed churner is a customer who leaves without any retention intervention.
+
+The root cause is **class imbalance**. The Telco dataset has roughly 73% non-churn / 27% churn. All three baseline models were trained treating every sample equally, so the models learned a bias toward predicting the majority class (no churn). The default classification threshold of 0.5 compounds this — a model that assigns churners a probability of 0.35 will still classify them as non-churn.
+
+---
+
+### Stage 1+2: Baseline vs Balanced Variants
+
+The fix was to train two parallel sets of models:
+
+**Baseline** — default settings, no class weighting.
+
+**Balanced** — `class_weight='balanced'` for `LogisticRegression` and `RandomForestClassifier`. This automatically reweights each training sample so the minority class contributes proportionally more to the loss.
+
+`GradientBoostingClassifier` does not support `class_weight` as a constructor argument. Instead, `compute_sample_weight('balanced', y_train)` from `sklearn.utils.class_weight` generates per-sample weights that are passed to `model.fit(..., sample_weight=weights)`. The effect is equivalent.
+
+**Results:**
+
+| Model | Stage | ROC-AUC | Recall | Precision | F1 |
+|---|---|---|---|---|---|
+| logistic_regression | baseline | 0.8320 | 0.516 | 0.621 | 0.564 |
+| random_forest | baseline | 0.8098 | 0.463 | 0.607 | 0.525 |
+| gradient_boosting | baseline | 0.8340 | 0.500 | 0.630 | 0.557 |
+| logistic_regression_balanced | balanced | 0.8317 | **0.791** | 0.498 | 0.611 |
+| random_forest_balanced | balanced | 0.8096 | 0.610 | 0.536 | 0.571 |
+| gradient_boosting_balanced | balanced | 0.8320 | **0.775** | 0.501 | 0.609 |
+
+**Key insight:** Class weighting dramatically improved recall (0.516 → 0.791 for LR balanced) with only a small drop in ROC-AUC. The trade-off is lower precision — the model now flags more non-churners as churners. Whether this is acceptable depends on the cost of a false positive (unnecessary retention offer) vs. a false negative (missed churner).
+
+---
+
+### Stage 3: GridSearchCV on the Best Model
+
+The best pre-tuning model by ROC-AUC was `gradient_boosting` (baseline, 0.8340). `GridSearchCV` with 5-fold cross-validation was run over:
+
+```python
+PARAM_GRIDS['gradient_boosting'] = {
+    'n_estimators':  [100, 200],
+    'max_depth':     [3, 4, 5],
+    'learning_rate': [0.05, 0.1, 0.2],
+    'subsample':     [0.8, 1.0]
+}
+```
+
+Scoring metric: `roc_auc` (maximises discrimination across all thresholds).
+
+**Best parameters found:**
+
+```
+learning_rate=0.05, max_depth=3, n_estimators=100, subsample=1.0
+```
+
+**Tuned model result:** ROC-AUC **0.8347** (+0.0007), Recall 0.476 at default threshold.
+
+The tuning gain in ROC-AUC is marginal. This is expected — Gradient Boosting with 100 trees at depth 3 is already a well-specified model on a 5,000-row dataset. Deeper trees or more estimators tend to overfit without regularisation.
+
+The `train.py` logic selects the tuned model as overall best by ROC-AUC:
+
+```python
+best_name = results_df.loc[results_df['roc_auc'].idxmax(), 'model']
+# → 'gradient_boosting_tuned'
+```
+
+---
+
+### Stage 4: Threshold Analysis
+
+Lowering the classification threshold shifts the precision/recall tradeoff without retraining. At threshold `t`, a customer is predicted to churn if `predict_proba(X)[:,1] >= t`.
+
+**Full precision/recall sweep on `gradient_boosting_tuned`:**
+
+| Threshold | Precision | Recall | F1 |
+|---|---|---|---|
+| 0.30 | 0.522 | 0.773 | 0.623 |
+| 0.35 | 0.549 | 0.687 | 0.610 |
+| 0.40 | 0.595 | 0.647 | 0.620 |
+| 0.45 | 0.615 | 0.551 | 0.581 |
+| **0.50** | **0.647** | **0.476** | **0.549** ← default |
+| 0.55 | 0.671 | 0.409 | 0.508 |
+| 0.60 | 0.712 | 0.350 | 0.470 |
+
+**Best F1 threshold:** 0.30 → precision=0.522, recall=0.773, F1=0.623
+
+**Recommended operating point:** threshold **0.35** provides a better precision/recall balance than 0.30 (precision 0.549 vs 0.522) while still substantially improving recall over the 0.50 default (0.687 vs 0.476). This is the threshold documented in `docs/usage.md`.
+
+---
+
+### Thought Process: Why Not Use the Balanced Model as the Saved Artifact?
+
+The saved `best_model.pkl` is `gradient_boosting_tuned` (baseline, no class weighting) rather than `logistic_regression_balanced` (highest recall). The reasoning:
+
+1. **ROC-AUC is threshold-independent** — it measures discrimination across the entire operating range. The tuned GB has the best ROC-AUC (0.8347), meaning it has the best raw signal regardless of threshold.
+2. **Threshold tuning achieves the same recall improvement** — lowering the GB tuned threshold to 0.30 gives recall 0.773, close to the balanced LR's 0.791, while preserving higher ROC-AUC.
+3. **One model, configurable threshold** — it's operationally simpler to deploy one model and document a threshold recommendation than to swap which artifact is "best" depending on the business objective.
+
+If the business objective changes to maximise recall above all else (e.g. very high cost of missed churners), `logistic_regression_balanced` at threshold 0.30 is the right choice. The full comparison table in `models/model_comparison_results.csv` preserves all variants for this decision.
+
+---
+
+### `scripts/threshold_analysis.py` — Reusable Threshold Sweep Script
+
+The threshold analysis results above were produced by `scripts/threshold_analysis.py`, a standalone CLI tool that can be re-run any time the model artifact is updated.
+
+#### Why a separate script?
+
+The threshold sweep doesn't belong in `train.py` — it's a post-hoc analysis tool, not part of the training pipeline. Keeping it in `scripts/` makes it:
+- Runnable independently after any retrain without re-executing GridSearchCV
+- Importable as a function (`run_threshold_analysis()`) from notebooks or other scripts
+- Configurable via CLI flags without touching source code
+
+#### How it works
+
+```
+scripts/threshold_analysis.py
+    ├── load best_model.pkl + test split from data/processed/
+    ├── call model.predict_proba(X_test)[:, 1]  → raw churn probabilities
+    ├── sklearn.metrics.precision_recall_curve() → full (precision, recall, threshold) arrays
+    ├── sample the curve at --step intervals (default 0.05)
+    └── print key operating points + full sweep table
+```
+
+`precision_recall_curve` returns one point per unique predicted probability — typically thousands of rows. The script samples this at a coarser step for readability and to make the CSV output useful.
+
+#### Key implementation decisions
+
+**Why `precision_recall_curve` instead of a manual loop?**
+Computing metrics by iterating over thresholds and calling `classification_report` each time is slow and redundant. `precision_recall_curve` computes the full curve in one pass over sorted probabilities — O(n log n) total instead of O(n × k) for k thresholds.
+
+**Why `full[full["threshold"] >= t].iloc[0]`?**
+The curve array has one entry per decision boundary. To find precision/recall at a given threshold `t`, we want the first row where `threshold >= t` — this gives the operating point immediately at or above `t`, which matches what `model.predict(X, threshold=t)` would produce.
+
+**Why `+ 1e-9` in the F1 denominator?**
+Prevents division-by-zero when both `precision` and `recall` are 0 (at very high thresholds near 1.0). Using `np.finfo(float).eps` would work too but `1e-9` is more readable.
+
+#### Usage
+
+```bash
+# Default: print sweep at step=0.05
+python scripts/threshold_analysis.py
+
+# Finer sweep saved to CSV
+python scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
+```
+
+#### Output interpretation
+
+The three key lines printed at the top:
+
+```
+Default (0.50):  precision=0.647  recall=0.476  f1=0.549
+Best F1:         threshold=0.301  precision=0.524  recall=0.770  f1=0.623
+Recall >= 0.70:  threshold=0.333  precision=0.539  recall=0.706  f1=0.611
+```
+
+- **Default (0.50)** — what you get with `model.predict()` out of the box
+- **Best F1** — the threshold that maximises the harmonic mean of precision and recall
+- **Recall >= 0.70** — the highest-precision operating point that still catches ≥70% of churners; useful when there's a minimum recall SLA
+
+---
+
+### Implementation Notes
+
+**`config.py` changes:**
+- Added `MODEL_CONFIGS_BALANCED` — parallel dict to `MODEL_CONFIGS` with `class_weight='balanced'` for LR and RF
+- Added `PARAM_GRIDS` — GridSearchCV parameter grids for all three model families
+- Both typed as `dict[str, dict[str, Any]]` (same pattern as `MODEL_CONFIGS`)
+
+**`train.py` changes:**
+- `_build_models()` helper maps config name → sklearn class for clean instantiation
+- Stages 1+2 loop over `{**MODEL_CONFIGS, **MODEL_CONFIGS_BALANCED}` in one pass
+- `compute_sample_weight('balanced', y_train)` passed as `fit_kwargs` for `gradient_boosting_balanced` only
+- Stage 3 uses `best_pre_tune.replace('_balanced', '')` to identify the base model family for the param grid
+- Results DataFrame gains a `stage` column (`baseline` / `balanced` / `tuned`) for easy filtering
+
+**`scripts/threshold_analysis.py`:**
+- Standalone CLI wrapping `run_threshold_analysis(step, output)`
+- Reuses `load_pickle` / `load_parquet` from `utils.py` — no duplicated I/O logic
+- `sys.path.insert(0, "src/")` allows clean imports from `config` and `utils` without installing the package
 
 ---
 
