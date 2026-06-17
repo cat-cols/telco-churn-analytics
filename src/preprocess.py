@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import logging
-from typing import Any, cast
+from typing import Any, cast, List, Dict
 
 from config import (
     DATA_PATH,
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 MIN_EXPECTED_ROWS = 100
 
-EXPECTED_DTYPES: dict[str, str] = {
+EXPECTED_DTYPES: Dict[str, str] = {
     "SeniorCitizen": "int64",
     "tenure": "int64",
     "MonthlyCharges": "float64",
@@ -40,7 +40,7 @@ EXPECTED_DTYPES: dict[str, str] = {
 
 def validate_schema(data: pd.DataFrame) -> None:
     """Validate dataset schema: required columns, minimum row count, and key dtypes."""
-    errors: list[str] = []
+    errors: List[str] = []
 
     # Check required columns
     required_columns = set(

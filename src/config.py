@@ -3,7 +3,7 @@ Configuration parameters for the Telco Churn Prediction project.
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -22,14 +22,14 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_PATH = RAW_DATA_DIR / "telco_customer_churn.csv"
 
 # Feature configuration
-NUMERICAL_COLUMNS: list[str] = [
+NUMERICAL_COLUMNS: List[str] = [
     "SeniorCitizen",
     "tenure",
     "MonthlyCharges",
     "TotalCharges",
 ]
 
-CATEGORICAL_COLUMNS: list[str] = [
+CATEGORICAL_COLUMNS: List[str] = [
     "gender",
     "Partner",
     "Dependents",
@@ -55,7 +55,7 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
 # Model parameters
-MODEL_CONFIGS: dict[str, dict[str, Any]] = {
+MODEL_CONFIGS: Dict[str, Dict[str, Any]] = {
     "logistic_regression": {"random_state": RANDOM_STATE, "max_iter": 1000},
     "random_forest": {"random_state": RANDOM_STATE, "n_estimators": 100},
     "gradient_boosting": {"random_state": RANDOM_STATE, "n_estimators": 100},
@@ -64,7 +64,7 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
 # Balanced variants — class_weight='balanced' to address low recall from class imbalance
 # GradientBoostingClassifier does not accept class_weight;
 # handled via sample_weight in train.py
-MODEL_CONFIGS_BALANCED: dict[str, dict[str, Any]] = {
+MODEL_CONFIGS_BALANCED: Dict[str, Dict[str, Any]] = {
     "logistic_regression_balanced": {
         "random_state": RANDOM_STATE,
         "max_iter": 1000,
@@ -79,7 +79,7 @@ MODEL_CONFIGS_BALANCED: dict[str, dict[str, Any]] = {
 }
 
 # GridSearch parameter grids for hyperparameter tuning (used in train.py)
-PARAM_GRIDS: dict[str, dict[str, list[Any]]] = {
+PARAM_GRIDS: Dict[str, Dict[str, List[Any]]] = {
     "gradient_boosting": {
         "n_estimators": [100, 200],
         "max_depth": [3, 4, 5],

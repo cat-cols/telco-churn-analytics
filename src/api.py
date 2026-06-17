@@ -13,7 +13,7 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, AsyncIterator, Literal
+from typing import Any, AsyncIterator, List, Dict, Union, Literal
 
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -29,13 +29,13 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MiB
 UPLOAD_READ_CHUNK_BYTES = 1024 * 1024  # 1 MiB
 
-YesNo = Literal["Yes", "No"]
-Gender = Literal["Male", "Female"]
-MultipleLines = Literal["Yes", "No", "No phone service"]
-InternetService = Literal["DSL", "Fiber optic", "No"]
-InternetDependentService = Literal["Yes", "No", "No internet service"]
-Contract = Literal["Month-to-month", "One year", "Two year"]
-PaymentMethod = Literal[
+YesNoType = Literal["Yes", "No"]
+GenderType = Literal["Male", "Female"]
+MultipleLinesType = Literal["Yes", "No", "No phone service"]
+InternetServiceType = Literal["DSL", "Fiber optic", "No"]
+InternetDependentServiceType = Literal["Yes", "No", "No internet service"]
+ContractType = Literal["Month-to-month", "One year", "Two year"]
+PaymentMethodType = Literal[
     "Electronic check",
     "Mailed check",
     "Bank transfer (automatic)",
@@ -86,7 +86,7 @@ def _empty_response(threshold: float) -> PredictionResponse:
     )
 
 
-def _predictions_to_json_records(results: pd.DataFrame) -> list[dict[str, Any]]:
+def _predictions_to_json_records(results: pd.DataFrame) -> List[Dict[str, Any]]:
     """Convert a prediction DataFrame into JSON-serializable records."""
     json_str = results.to_json(orient="records")
     loaded_json = [] if json_str is None else json.loads(json_str)
@@ -116,7 +116,7 @@ def _series_mean_as_float(series: pd.Series) -> float:
     return 0.0 if pd.isna(mean_value) else float(mean_value)
 
 
-def _build_summary(results: pd.DataFrame, threshold: float) -> dict[str, Any]:
+def _build_summary(results: pd.DataFrame, threshold: float) -> Dict[str, Any]:
     """Build summary metrics while safely handling empty outputs."""
     total_customers = len(results)
     predicted_churners = (
@@ -126,7 +126,7 @@ def _build_summary(results: pd.DataFrame, threshold: float) -> dict[str, Any]:
         _series_mean_as_float(pd.Series(results["Predicted_Churn"])) if total_customers else 0.0
     )
 
-    summary: dict[str, Any] = {
+    summary: Dict[str, Any] = {
         "total_customers": total_customers,
         "predicted_churners": predicted_churners,
         "churn_rate": churn_rate,
@@ -241,37 +241,37 @@ class CustomerRecord(BaseModel):
         description="Total amount charged to the customer",
     )
 
-    gender: Gender = Field(..., description="Customer gender")
-    Partner: YesNo = Field(..., description="Whether the customer has a partner")
-    Dependents: YesNo = Field(..., description="Whether the customer has dependents")
-    PhoneService: YesNo = Field(..., description="Whether the customer has phone service")
-    MultipleLines: MultipleLines = Field(
+    gender: GenderType = Field(..., description="Customer gender")
+    Partner: YesNoType = Field(..., description="Whether the customer has a partner")
+    Dependents: YesNoType = Field(..., description="Whether the customer has dependents")
+    PhoneService: YesNoType = Field(..., description="Whether the customer has phone service")
+    MultipleLines: MultipleLinesType = Field(
         ..., description="Whether the customer has multiple lines"
     )
-    InternetService: InternetService = Field(..., description="Internet service type")
-    OnlineSecurity: InternetDependentService = Field(
+    InternetService: InternetServiceType = Field(..., description="Internet service type")
+    OnlineSecurity: InternetDependentServiceType = Field(
         ..., description="Whether the customer has online security"
     )
-    OnlineBackup: InternetDependentService = Field(
+    OnlineBackup: InternetDependentServiceType = Field(
         ..., description="Whether the customer has online backup"
     )
-    DeviceProtection: InternetDependentService = Field(
+    DeviceProtection: InternetDependentServiceType = Field(
         ..., description="Whether the customer has device protection"
     )
-    TechSupport: InternetDependentService = Field(
+    TechSupport: InternetDependentServiceType = Field(
         ..., description="Whether the customer has tech support"
     )
-    StreamingTV: InternetDependentService = Field(
+    StreamingTV: InternetDependentServiceType = Field(
         ..., description="Whether the customer has streaming TV"
     )
-    StreamingMovies: InternetDependentService = Field(
+    StreamingMovies: InternetDependentServiceType = Field(
         ..., description="Whether the customer has streaming movies"
     )
-    Contract: Contract = Field(..., description="Contract type")
-    PaperlessBilling: YesNo = Field(
+    Contract: ContractType = Field(..., description="Contract type")
+    PaperlessBilling: YesNoType = Field(
         ..., description="Whether the customer has paperless billing"
     )
-    PaymentMethod: PaymentMethod = Field(..., description="Payment method")
+    PaymentMethod: PaymentMethodType = Field(..., description="Payment method")
 
     @model_validator(mode="after")
     def validate_service_consistency(self) -> CustomerRecord:
@@ -313,7 +313,7 @@ class CustomerRecord(BaseModel):
 class PredictionRequest(BaseModel):
     """Request model for batch prediction with customer records."""
 
-    records: list[CustomerRecord] = Field(
+    records: List[CustomerRecord] = Field(
         ..., description="List of customer records to predict"
     )
     threshold: float = Field(
@@ -327,10 +327,10 @@ class PredictionRequest(BaseModel):
 class PredictionResponse(BaseModel):
     """Response model for prediction results."""
 
-    predictions: list[dict[str, Any]] = Field(
+    predictions: List[Dict[str, Any]] = Field(
         ..., description="Prediction results for each customer"
     )
-    summary: dict[str, Any] = Field(
+    summary: Dict[str, Any] = Field(
         ..., description="Summary statistics of predictions"
     )
 
@@ -344,7 +344,7 @@ app = FastAPI(
 
 
 @app.get("/health")
-async def health_check(request: Request) -> dict[str, bool | str]:
+async def health_check(request: Request) -> Dict[str, Union[bool, str]]:
     """Health check endpoint to verify the API is running and model is loaded."""
     _get_artifacts(request)
     return {

@@ -14,6 +14,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from sklearn.utils.class_weight import compute_sample_weight
 import logging
+from typing import List, Dict, Any
 
 from config import (
     IDENTIFIER_COLUMN,
@@ -65,8 +66,8 @@ def train_models():
     # Sample weights for GB balanced (GradientBoosting has no class_weight param)
     sample_weights = compute_sample_weight("balanced", y_train)
 
-    results: list[dict] = []
-    trained_models: dict = {}
+    results: List[Dict[str, Any]] = []
+    trained_models: Dict[str, Any] = {}
 
     # --- Stage 1 & 2: baseline + balanced variants ---
     all_configs = {**MODEL_CONFIGS, **MODEL_CONFIGS_BALANCED}
@@ -74,7 +75,7 @@ def train_models():
 
     for name, model in models.items():
         logger.info(f"Training {name}")
-        fit_kwargs: dict = {}
+        fit_kwargs: Dict[str, Any] = {}
         if name == "gradient_boosting_balanced":
             fit_kwargs["sample_weight"] = sample_weights
 
