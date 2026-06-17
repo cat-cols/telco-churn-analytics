@@ -419,24 +419,32 @@ def validate_output_schema(results: pd.DataFrame) -> Tuple[bool, List[str]]:
                 )
                 has_out_of_range = out_of_range.any()
             except Exception:
+                out_of_range = pd.Series([False])
                 has_out_of_range = False
         if has_out_of_range:
-            count = 1 if isinstance(proba, (float, int)) else int(out_of_range.sum())
+            if isinstance(proba, (float, int)):
+                count = 1
+            else:
+                # Ensure out_of_range is a Series before calling .sum()
+                if isinstance(out_of_range, pd.Series):
+                    count = int(out_of_range.sum())
+                else:
+                    count = 1
             errors.append(f"Churn_Probability has {count} values outside [0, 1]")
 
     # 3. Predicted_Churn strictly 0/1
     if "Predicted_Churn" in results.columns:
         invalid = ~results["Predicted_Churn"].isin([0, 1])
-        if invalid.any():
+        if bool(invalid.any()):
             errors.append(
-                f"Predicted_Churn has {int(invalid.sum())} values not in {{0, 1}}"
+                f"Predicted_Churn has {invalid.sum().item()} values not in {{0, 1}}"
             )
 
     # 4. Risk_Level membership (ignore NaN)
     if "Risk_Level" in results.columns:
         rl = results["Risk_Level"].astype("object")
-        invalid_rl = rl.notna() & ~rl.isin(VALID_RISK_LEVELS)
-        if invalid_rl.any():
+        invalid_rl = rl.notna() & ~rl.isin(list(VALID_RISK_LEVELS))
+        if bool(invalid_rl.any()):
             bad = sorted(set(rl[invalid_rl].tolist()))
             errors.append(f"Risk_Level has invalid values: {bad}")
 

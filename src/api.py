@@ -6,172 +6,314 @@ It wraps the existing prediction logic from src/predict.py and loads the model
 once at startup for efficiency.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
-from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from io import BytesIO
+from typing import Any, AsyncIterator, Literal
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from pydantic import BaseModel, Field, model_validator
 
-from config import (
-    BEST_MODEL_FILE,
-    ENCODER_FILE,
-    SCALER_FILE,
-)
+from config import BEST_MODEL_FILE, ENCODER_FILE, SCALER_FILE
 from predict import predict, validate_output_schema
 from utils import load_pickle
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global variables for model and preprocessors
-model = None
-scaler = None
-encoder = None
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MiB
+UPLOAD_READ_CHUNK_BYTES = 1024 * 1024  # 1 MiB
+
+YesNo = Literal["Yes", "No"]
+Gender = Literal["Male", "Female"]
+MultipleLines = Literal["Yes", "No", "No phone service"]
+InternetService = Literal["DSL", "Fiber optic", "No"]
+InternetDependentService = Literal["Yes", "No", "No internet service"]
+Contract = Literal["Month-to-month", "One year", "Two year"]
+PaymentMethod = Literal[
+    "Electronic check",
+    "Mailed check",
+    "Bank transfer (automatic)",
+    "Credit card (automatic)",
+]
 
 
-# Load model and preprocessors at import time for testing
-def _load_model_artifacts():
-    """Load model and preprocessors - called at import time."""
-    global model, scaler, encoder
-    try:
-        logger.info(f"Loading model from {BEST_MODEL_FILE}")
-        model = load_pickle(BEST_MODEL_FILE)
+@dataclass(frozen=True)
+class ModelArtifacts:
+    """Loaded model and preprocessing artifacts used by the prediction pipeline."""
 
-        logger.info(f"Loading scaler from {SCALER_FILE}")
-        scaler = load_pickle(SCALER_FILE)
-
-        logger.info(f"Loading encoder from {ENCODER_FILE}")
-        encoder = load_pickle(ENCODER_FILE)
-
-        logger.info("Model and preprocessors loaded successfully")
-    except Exception as e:
-        logger.error(f"Failed to load model artifacts: {e}")
-        # Don't raise here - let the API handle missing models gracefully
+    model: Any
+    scaler: Any
+    encoder: Any
 
 
-# Load artifacts at import time
-_load_model_artifacts()
+def _load_model_artifacts() -> ModelArtifacts:
+    """Load model and preprocessors once during app startup."""
+    logger.info("Loading model artifacts")
+    artifacts = ModelArtifacts(
+        model=load_pickle(BEST_MODEL_FILE),
+        scaler=load_pickle(SCALER_FILE),
+        encoder=load_pickle(ENCODER_FILE),
+    )
+    logger.info("Model and preprocessors loaded successfully")
+    return artifacts
+
+
+def _get_artifacts(request: Request) -> ModelArtifacts:
+    """Return loaded artifacts or raise a 503 response if the app is not ready."""
+    artifacts = getattr(request.app.state, "artifacts", None)
+    if not isinstance(artifacts, ModelArtifacts):
+        raise HTTPException(status_code=503, detail="Model or preprocessors not loaded")
+    return artifacts
+
+
+def _empty_response(threshold: float) -> PredictionResponse:
+    """Build a consistent response for an empty input batch."""
+    return PredictionResponse(
+        predictions=[],
+        summary={
+            "total_customers": 0,
+            "predicted_churners": 0,
+            "churn_rate": 0.0,
+            "threshold_used": threshold,
+            "risk_distribution": {},
+        },
+    )
+
+
+def _predictions_to_json_records(results: pd.DataFrame) -> list[dict[str, Any]]:
+    """Convert a prediction DataFrame into JSON-serializable records."""
+    json_str = results.to_json(orient="records")
+    loaded_json = [] if json_str is None else json.loads(json_str)
+    if not isinstance(loaded_json, list):
+        raise ValueError("Prediction output could not be converted to JSON records")
+    return loaded_json
+
+
+def _numeric_series(series: pd.Series) -> pd.Series:
+    """Coerce a Series to numeric values with invalid values treated as zero."""
+    numeric_series = pd.Series(pd.to_numeric(series, errors="coerce"))
+    return numeric_series.fillna(0)
+
+
+def _series_sum_as_int(series: pd.Series) -> int:
+    """Return a scalar integer sum without relying on pandas Series.sum typing."""
+    values = _numeric_series(series).to_numpy()
+    return int(values.sum())
+
+
+def _series_mean_as_float(series: pd.Series) -> float:
+    """Return a scalar float mean without returning NaN for empty/all-invalid data."""
+    if series.empty:
+        return 0.0
+    numeric = _numeric_series(series)
+    mean_value = numeric.mean()
+    return 0.0 if pd.isna(mean_value) else float(mean_value)
+
+
+def _build_summary(results: pd.DataFrame, threshold: float) -> dict[str, Any]:
+    """Build summary metrics while safely handling empty outputs."""
+    total_customers = len(results)
+    predicted_churners = (
+        _series_sum_as_int(pd.Series(results["Predicted_Churn"])) if total_customers else 0
+    )
+    churn_rate = (
+        _series_mean_as_float(pd.Series(results["Predicted_Churn"])) if total_customers else 0.0
+    )
+
+    summary: dict[str, Any] = {
+        "total_customers": total_customers,
+        "predicted_churners": predicted_churners,
+        "churn_rate": churn_rate,
+        "threshold_used": threshold,
+        "risk_distribution": results["Risk_Level"].value_counts().to_dict()
+        if total_customers
+        else {},
+    }
+
+    if "Is_New_Customer" in results.columns and total_customers:
+        new_customers = _series_sum_as_int(pd.Series(results["Is_New_Customer"]))
+        if new_customers > 0:
+            new_customer_mask = _numeric_series(pd.Series(results["Is_New_Customer"])) == 1
+            new_churn_rate = _series_mean_as_float(
+                results.loc[new_customer_mask, "Predicted_Churn"]
+            )
+            summary.update(
+                {
+                    "new_customers": new_customers,
+                    "new_customer_churn_rate": new_churn_rate,
+                }
+            )
+
+    return summary
+
+
+def _predict_dataframe(
+    df: pd.DataFrame,
+    artifacts: ModelArtifacts,
+    threshold: float,
+) -> PredictionResponse:
+    """Run the core prediction pipeline and shape the API response."""
+    if df.empty:
+        return _empty_response(threshold)
+
+    results = predict(
+        df,
+        artifacts.model,
+        artifacts.scaler,
+        artifacts.encoder,
+        threshold=threshold,
+    )
+
+    is_valid, schema_errors = validate_output_schema(results)
+    if not is_valid:
+        logger.error("Output schema validation failed: %s", schema_errors)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction output validation failed: {schema_errors}",
+        )
+
+    predictions = _predictions_to_json_records(results)
+    summary = _build_summary(results, threshold)
+    return PredictionResponse(predictions=predictions, summary=summary)
+
+
+async def _read_upload_with_limit(file: UploadFile) -> bytes:
+    """Read an uploaded file in chunks and reject files over MAX_UPLOAD_BYTES."""
+    content = bytearray()
+
+    while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+
+        content.extend(chunk)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded CSV exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB limit",
+            )
+
+    return bytes(content)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Load model and preprocessors at startup, cleanup at shutdown."""
-    global model, scaler, encoder
-
     logger.info("Starting up FastAPI application...")
-
+    app.state.artifacts = _load_model_artifacts()
     try:
-        # Load model and preprocessors
-        logger.info(f"Loading model from {BEST_MODEL_FILE}")
-        model = load_pickle(BEST_MODEL_FILE)
-
-        logger.info(f"Loading scaler from {SCALER_FILE}")
-        scaler = load_pickle(SCALER_FILE)
-
-        logger.info(f"Loading encoder from {ENCODER_FILE}")
-        encoder = load_pickle(ENCODER_FILE)
-
-        logger.info("Model and preprocessors loaded successfully")
-
         yield
-
-    except Exception as e:
-        logger.error(f"Failed to load model or preprocessors: {e}")
-        raise
     finally:
+        app.state.artifacts = None
         logger.info("Shutting down FastAPI application...")
 
 
-# Pydantic model for input validation
 class CustomerRecord(BaseModel):
     """Pydantic model for a single customer record."""
 
-    customerID: str = Field(..., description="Unique customer identifier")
+    customerID: str = Field(..., min_length=1, description="Unique customer identifier")
 
-    # Numerical fields
     SeniorCitizen: int = Field(
         ..., ge=0, le=1, description="Whether the customer is a senior citizen (0 or 1)"
     )
     tenure: int = Field(
-        ..., ge=0, description="Number of months the customer has been with the company"
+        ...,
+        ge=0,
+        le=120,
+        description="Number of months the customer has been with the company",
     )
     MonthlyCharges: float = Field(
-        ..., ge=0, description="Monthly amount charged to the customer"
+        ...,
+        ge=0,
+        le=10_000,
+        description="Monthly amount charged to the customer",
     )
     TotalCharges: float = Field(
-        ..., ge=0, description="Total amount charged to the customer"
+        ...,
+        ge=0,
+        le=1_000_000,
+        description="Total amount charged to the customer",
     )
 
-    # Categorical fields
-    gender: str = Field(..., description="Customer gender (Male/Female)")
-    Partner: str = Field(..., description="Whether the customer has a partner (Yes/No)")
-    Dependents: str = Field(
-        ..., description="Whether the customer has dependents (Yes/No)"
+    gender: Gender = Field(..., description="Customer gender")
+    Partner: YesNo = Field(..., description="Whether the customer has a partner")
+    Dependents: YesNo = Field(..., description="Whether the customer has dependents")
+    PhoneService: YesNo = Field(..., description="Whether the customer has phone service")
+    MultipleLines: MultipleLines = Field(
+        ..., description="Whether the customer has multiple lines"
     )
-    PhoneService: str = Field(
-        ..., description="Whether the customer has phone service (Yes/No)"
+    InternetService: InternetService = Field(..., description="Internet service type")
+    OnlineSecurity: InternetDependentService = Field(
+        ..., description="Whether the customer has online security"
     )
-    MultipleLines: str = Field(
-        ...,
-        description="Whether the customer has multiple lines "
-        "(Yes/No/No phone service)",
+    OnlineBackup: InternetDependentService = Field(
+        ..., description="Whether the customer has online backup"
     )
-    InternetService: str = Field(
-        ..., description="Internet service type (DSL/Fiber optic/No)"
+    DeviceProtection: InternetDependentService = Field(
+        ..., description="Whether the customer has device protection"
     )
-    OnlineSecurity: str = Field(
-        ...,
-        description="Whether the customer has online security "
-        "(Yes/No/No internet service)",
+    TechSupport: InternetDependentService = Field(
+        ..., description="Whether the customer has tech support"
     )
-    OnlineBackup: str = Field(
-        ...,
-        description="Whether the customer has online backup "
-        "(Yes/No/No internet service)",
+    StreamingTV: InternetDependentService = Field(
+        ..., description="Whether the customer has streaming TV"
     )
-    DeviceProtection: str = Field(
-        ...,
-        description="Whether the customer has device protection "
-        "(Yes/No/No internet service)",
+    StreamingMovies: InternetDependentService = Field(
+        ..., description="Whether the customer has streaming movies"
     )
-    TechSupport: str = Field(
-        ...,
-        description="Whether the customer has tech support "
-        "(Yes/No/No internet service)",
+    Contract: Contract = Field(..., description="Contract type")
+    PaperlessBilling: YesNo = Field(
+        ..., description="Whether the customer has paperless billing"
     )
-    StreamingTV: str = Field(
-        ...,
-        description="Whether the customer has streaming TV "
-        "(Yes/No/No internet service)",
-    )
-    StreamingMovies: str = Field(
-        ...,
-        description="Whether the customer has streaming movies "
-        "(Yes/No/No internet service)",
-    )
-    Contract: str = Field(
-        ..., description="Contract type (Month-to-month/One year/Two year)"
-    )
-    PaperlessBilling: str = Field(
-        ..., description="Whether the customer has paperless billing (Yes/No)"
-    )
-    PaymentMethod: str = Field(
-        ...,
-        description="Payment method (Electronic check/Mailed check/"
-        "Bank transfer/Credit card)",
-    )
+    PaymentMethod: PaymentMethod = Field(..., description="Payment method")
+
+    @model_validator(mode="after")
+    def validate_service_consistency(self) -> CustomerRecord:
+        """Reject internally inconsistent service combinations early."""
+        if self.PhoneService == "No" and self.MultipleLines != "No phone service":
+            raise ValueError("MultipleLines must be 'No phone service' when PhoneService is 'No'")
+
+        if self.PhoneService == "Yes" and self.MultipleLines == "No phone service":
+            raise ValueError("MultipleLines cannot be 'No phone service' when PhoneService is 'Yes'")
+
+        internet_fields = [
+            self.OnlineSecurity,
+            self.OnlineBackup,
+            self.DeviceProtection,
+            self.TechSupport,
+            self.StreamingTV,
+            self.StreamingMovies,
+        ]
+        if self.InternetService == "No" and any(
+            value != "No internet service" for value in internet_fields
+        ):
+            raise ValueError(
+                "Internet-dependent services must be 'No internet service' when InternetService is 'No'"
+            )
+
+        if self.InternetService != "No" and any(
+            value == "No internet service" for value in internet_fields
+        ):
+            raise ValueError(
+                "Internet-dependent services cannot be 'No internet service' when InternetService is active"
+            )
+
+        if self.tenure == 0 and self.TotalCharges > 0:
+            raise ValueError("TotalCharges must be 0 when tenure is 0")
+
+        return self
 
 
 class PredictionRequest(BaseModel):
     """Request model for batch prediction with customer records."""
 
-    records: List[CustomerRecord] = Field(
+    records: list[CustomerRecord] = Field(
         ..., description="List of customer records to predict"
     )
     threshold: float = Field(
@@ -185,15 +327,14 @@ class PredictionRequest(BaseModel):
 class PredictionResponse(BaseModel):
     """Response model for prediction results."""
 
-    predictions: List[Dict[str, Any]] = Field(
+    predictions: list[dict[str, Any]] = Field(
         ..., description="Prediction results for each customer"
     )
-    summary: Dict[str, Any] = Field(
+    summary: dict[str, Any] = Field(
         ..., description="Summary statistics of predictions"
     )
 
 
-# Create FastAPI app
 app = FastAPI(
     title="Telco Churn Prediction API",
     description="API for predicting customer churn in telecommunications",
@@ -203,216 +344,95 @@ app = FastAPI(
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request) -> dict[str, bool | str]:
     """Health check endpoint to verify the API is running and model is loaded."""
-    if model is None or scaler is None or encoder is None:
-        raise HTTPException(status_code=503, detail="Model or preprocessors not loaded")
-
+    _get_artifacts(request)
     return {
         "status": "healthy",
-        "model_loaded": model is not None,
-        "scaler_loaded": scaler is not None,
-        "encoder_loaded": encoder is not None,
+        "model_loaded": True,
+        "scaler_loaded": True,
+        "encoder_loaded": True,
     }
 
 
 @app.post("/predict/records", response_model=PredictionResponse)
-async def predict_records(request: PredictionRequest):
-    """
-    Predict churn for customer records provided as JSON.
+async def predict_records(
+    request_body: PredictionRequest,
+    request: Request,
+) -> PredictionResponse:
+    """Predict churn for customer records provided as JSON."""
+    artifacts = _get_artifacts(request)
 
-    Args:
-        request: PredictionRequest containing customer records and optional threshold
-
-    Returns:
-        PredictionResponse with predictions and summary statistics
-    """
-    if model is None or scaler is None or encoder is None:
-        raise HTTPException(status_code=503, detail="Model or preprocessors not loaded")
+    if not request_body.records:
+        logger.info("Received empty records list")
+        return _empty_response(request_body.threshold)
 
     try:
-        # Handle empty records list
-        if not request.records:
-            logger.info("Received empty records list")
-            return PredictionResponse(
-                predictions=[],
-                summary={
-                    "total_customers": 0,
-                    "predicted_churners": 0,
-                    "churn_rate": 0.0,
-                    "threshold_used": request.threshold,
-                    "risk_distribution": {},
-                },
-            )
-
-        # Convert Pydantic models to DataFrame
-        records_data = [record.model_dump() for record in request.records]
+        records_data = [record.model_dump() for record in request_body.records]
         df = pd.DataFrame(records_data)
+        logger.info("Received %s records for prediction", len(df))
 
-        logger.info(f"Received {len(df)} records for prediction")
-
-        # Make predictions using the core predict function
-        results = predict(df, model, scaler, encoder, threshold=request.threshold)
-
-        # Validate output schema
-        is_valid, schema_errors = validate_output_schema(results)
-        if not is_valid:
-            logger.error(f"Output schema validation failed: {schema_errors}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Prediction output validation failed: {schema_errors}",
-            )
-
-        # Convert DataFrame to JSON-serializable format
-        # predictions = json.loads(results.to_json(orient='records'))
-        json_str = results.to_json(orient="records")
-        if json_str is None:
-            predictions = []
-        else:
-            predictions = json.loads(json_str)
-
-        # Create summary statistics
-        summary = {
-            "total_customers": len(results),
-            "predicted_churners": int(results["Predicted_Churn"].sum().item()),
-            "churn_rate": float(results["Predicted_Churn"].mean().item()),
-            "threshold_used": request.threshold,
-            "risk_distribution": results["Risk_Level"].value_counts().to_dict(),
-        }
-
-        # Add new customer stats if available
-        if "Is_New_Customer" in results.columns:
-            new_customers = results["Is_New_Customer"].sum()
-            if new_customers > 0:
-                new_churn_rate = results[results["Is_New_Customer"] == 1][
-                    "Predicted_Churn"
-                ].mean()
-                summary.update(
-                    {
-                        "new_customers": int(new_customers.item()),
-                        "new_customer_churn_rate": float(
-                            new_churn_rate.item()
-                            if not pd.isna(new_churn_rate)
-                            else 0.0
-                        ),
-                    }
-                )
-
+        response = _predict_dataframe(df, artifacts, request_body.threshold)
         logger.info(
-            f"Prediction completed: {summary['predicted_churners']} churners "
-            f"out of {summary['total_customers']} customers"
+            "Prediction completed: %s churners out of %s customers",
+            response.summary["predicted_churners"],
+            response.summary["total_customers"],
         )
-
-        return PredictionResponse(predictions=predictions, summary=summary)
-
-    except Exception as e:
-        logger.error(f"Error during prediction: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        return response
+    except HTTPException:
+        raise
+    except (ValueError, KeyError, TypeError, RuntimeError) as exc:
+        logger.exception("Error during prediction")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
 
 
 @app.post("/predict/file", response_model=PredictionResponse)
-async def predict_from_uploaded_file(file: UploadFile = File(...)):
-    """
-    Predict churn for customers from an uploaded CSV file.
+async def predict_from_uploaded_file(
+    request: Request,
+    file: UploadFile = File(...),
+    threshold: float = Query(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description="Classification threshold for churn prediction",
+    ),
+) -> PredictionResponse:
+    """Predict churn for customers from an uploaded CSV file."""
+    artifacts = _get_artifacts(request)
 
-    Args:
-        file: CSV file containing customer data
-
-    Returns:
-        PredictionResponse with predictions and summary statistics
-    """
-    if model is None or scaler is None or encoder is None:
-        raise HTTPException(status_code=503, detail="Model or preprocessors not loaded")
-
-    # Validate file type
-    if not file.filename or not file.filename.endswith(".csv"):
+    if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
 
-    temp_file_path = None
     try:
-        # Save uploaded file to temporary location
-        with NamedTemporaryFile(mode="w+b", suffix=".csv", delete=False) as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-
-        logger.info(f"Processing uploaded file: {file.filename}")
-
-        # Load data from temporary file
-        df = pd.read_csv(temp_file_path)
-        logger.info(f"Loaded {len(df)} records from uploaded file")
-
-        # Make predictions using the core predict function
-        results = predict(df, model, scaler, encoder)
-
-        # Validate output schema
-        is_valid, schema_errors = validate_output_schema(results)
-        if not is_valid:
-            logger.error(f"Output schema validation failed: {schema_errors}")
+        content = await _read_upload_with_limit(file)
+        if not content.strip():
             raise HTTPException(
-                status_code=500,
-                detail=f"Prediction output validation failed: {schema_errors}",
+                status_code=400, detail="Uploaded CSV file is empty or invalid"
             )
 
-        # Convert DataFrame to JSON-serializable format
-        json_str = results.to_json(orient="records")
-        if json_str is None:
-            predictions = []
-        else:
-            predictions = json.loads(json_str)
+        logger.info("Processing uploaded file: %s", file.filename)
+        df = pd.read_csv(BytesIO(content))
+        logger.info("Loaded %s records from uploaded file", len(df))
 
-        # Create summary statistics
-        summary = {
-            "total_customers": len(results),
-            "predicted_churners": int(results["Predicted_Churn"].sum().item()),
-            "churn_rate": float(results["Predicted_Churn"].mean().item()),
-            "threshold_used": 0.5,  # Default threshold for file upload
-            "risk_distribution": results["Risk_Level"].value_counts().to_dict(),
-        }
-
-        # Add new customer stats if available
-        if "Is_New_Customer" in results.columns:
-            new_customers = results["Is_New_Customer"].sum()
-            if new_customers > 0:
-                new_churn_rate = results[results["Is_New_Customer"] == 1][
-                    "Predicted_Churn"
-                ].mean()
-                summary.update(
-                    {
-                        "new_customers": int(new_customers.item()),
-                        "new_customer_churn_rate": float(
-                            new_churn_rate.item()
-                            if not pd.isna(new_churn_rate)
-                            else 0.0
-                        ),
-                    }
-                )
-
+        response = _predict_dataframe(df, artifacts, threshold)
         logger.info(
-            f"File prediction completed: {summary['predicted_churners']} churners "
-            f"out of {summary['total_customers']} customers"
+            "File prediction completed: %s churners out of %s customers",
+            response.summary["predicted_churners"],
+            response.summary["total_customers"],
         )
-
-        # Clean up temporary file
-        if temp_file_path:
-            Path(temp_file_path).unlink(missing_ok=True)
-
-        return PredictionResponse(predictions=predictions, summary=summary)
-
-    except pd.errors.EmptyDataError:
-        logger.error("Uploaded CSV file is empty or invalid")
-        # Clean up temporary file if it exists
-        if temp_file_path:
-            Path(temp_file_path).unlink(missing_ok=True)
+        return response
+    except HTTPException:
+        raise
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as exc:
+        logger.warning("Uploaded CSV file is empty or invalid: %s", exc)
         raise HTTPException(
             status_code=400, detail="Uploaded CSV file is empty or invalid"
-        )
-    except Exception as e:
-        logger.error(f"Error processing uploaded file: {e}")
-        # Clean up temporary file if it exists
-        if temp_file_path:
-            Path(temp_file_path).unlink(missing_ok=True)
-        raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}")
+        ) from exc
+    except (ValueError, KeyError, TypeError, RuntimeError) as exc:
+        logger.exception("Error processing uploaded file")
+        raise HTTPException(
+            status_code=500, detail=f"File processing failed: {exc}"
+        ) from exc
 
 
 if __name__ == "__main__":
