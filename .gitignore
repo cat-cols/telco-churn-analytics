@@ -1,6 +1,5 @@
-# /Users/b/DATA/PROJECTS/Telco/.gitignore
 # ============================================================
-# .gitignore for Telco (tiered Levels) — allow code, ignore runs
+# .gitignore for telco retention strategies
 # ============================================================
 #
 # QUICK GUIDE (symbol usage)
@@ -132,8 +131,11 @@ Thumbs.db
 # ============================================================
 # Personal-notes
 # ============================================================
-# notes/
+notes/
 models/*.pkl
 sample_predictions.csv
 .DS_Store
 **/.DS_Store
+
+# Papermill execution outputs
+*.executed.ipynb
