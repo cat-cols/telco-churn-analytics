@@ -21,16 +21,30 @@ from sklearn.metrics import precision_recall_curve
 # Allow imports from src/
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from config import BEST_MODEL_FILE, TEST_DATA_FILE, TEST_LABELS_FILE, IDENTIFIER_COLUMN
+from config import (
+    BEST_MODEL_FILE, TEST_DATA_FILE, TEST_LABELS_FILE, IDENTIFIER_COLUMN,
+    TEST_ENGINEERED_FILE
+)
 from utils import load_parquet, load_pickle
 
 
 def run_threshold_analysis(step: float = 0.05, output: str | None = None) -> pd.DataFrame:
     """Compute precision/recall/F1 across thresholds and return as a DataFrame."""
     model  = load_pickle(BEST_MODEL_FILE)
-    X_test = load_parquet(TEST_DATA_FILE).drop(columns=[IDENTIFIER_COLUMN])
-    y_test = load_parquet(TEST_LABELS_FILE).squeeze()
-    y_bin  = pd.Series(y_test == "Yes", dtype=int)
+    
+    # Use engineered features if available, otherwise fall back to basic processed data
+    if TEST_ENGINEERED_FILE.exists():
+        X_test = load_parquet(TEST_ENGINEERED_FILE).drop(columns=[IDENTIFIER_COLUMN])
+    else:
+        X_test = load_parquet(TEST_DATA_FILE).drop(columns=[IDENTIFIER_COLUMN])
+    
+    y_test = load_parquet(TEST_LABELS_FILE).iloc[:, 0]
+    # Labels may be stored as ints (0/1) or strings ('Yes'/'No') depending on the
+    # preprocessing version; normalize both to binary 0/1 with 1 = churn.
+    if y_test.dtype == object:
+        y_bin = (y_test == "Yes").astype(int)
+    else:
+        y_bin = y_test.astype(int)
 
     proba = model.predict_proba(X_test)[:, 1]
 
