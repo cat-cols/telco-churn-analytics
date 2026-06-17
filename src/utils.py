@@ -3,14 +3,16 @@ Utility functions for the Telco Churn Prediction project.
 """
 
 import pandas as pd
-import numpy as np
 import pickle
 from pathlib import Path
-from typing import Tuple, Any
+from typing import Any
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 logger = logging.getLogger(__name__)
 
 
@@ -50,10 +52,13 @@ def load_parquet(file_path: Path) -> pd.DataFrame:
 
 def evaluate_model(model, X_test, y_test) -> dict:
     """Evaluate model and return metrics."""
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-    
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score,
+        f1_score, roc_auc_score
+    )
+
     y_pred = model.predict(X_test)
-    
+
     if hasattr(model, 'predict_proba'):
         # Get probability of positive class (Yes)
         classes = model.classes_
@@ -64,11 +69,11 @@ def evaluate_model(model, X_test, y_test) -> dict:
             y_proba = (y_pred == 'Yes').astype(int)
     else:
         y_proba = (y_pred == 'Yes').astype(int)
-    
+
     # Convert string labels to binary for metrics calculation
     y_test_binary = (y_test == 'Yes').astype(int)
     y_pred_binary = (y_pred == 'Yes').astype(int)
-    
+
     metrics = {
         'accuracy': accuracy_score(y_test_binary, y_pred_binary),
         'precision': precision_score(y_test_binary, y_pred_binary),
@@ -76,5 +81,5 @@ def evaluate_model(model, X_test, y_test) -> dict:
         'f1': f1_score(y_test_binary, y_pred_binary),
         'roc_auc': roc_auc_score(y_test_binary, y_proba)
     }
-    
+
     return metrics

@@ -16,8 +16,7 @@ import logging
 from typing import Dict, List, Tuple, Optional
 
 from config import (
-    PROCESSED_DATA_DIR, MODELS_DIR, IDENTIFIER_COLUMN,
-    NUMERICAL_COLUMNS, CATEGORICAL_COLUMNS,
+    IDENTIFIER_COLUMN, NUMERICAL_COLUMNS, CATEGORICAL_COLUMNS,
     SCALER_FILE, ENCODER_FILE, BEST_MODEL_FILE
 )
 from utils import load_pickle
@@ -37,6 +36,15 @@ IMPUTATION_VALUES = {
     'MonthlyCharges': 65.0,  # Median from training
     'tenure': 29  # Median from training
 }
+
+# Expected schema of the prediction output (enforced by validate_output_schema)
+REQUIRED_OUTPUT_COLUMNS = {
+    'CustomerID',
+    'Churn_Probability',
+    'Predicted_Churn',
+    'Risk_Level',
+}
+VALID_RISK_LEVELS = {'Low', 'Medium', 'High'}
 
 
 def load_model_and_preprocessors():
@@ -69,14 +77,22 @@ def validate_input_data(data: pd.DataFrame) -> Tuple[bool, List[str]]:
     # Check for extreme values
     for col, rules in VALIDATION_RULES.items():
         if col in data.columns:
-            # Fix #1: coerce to numeric before comparison — TotalCharges is still a raw string at validation time
-            col_numeric: pd.Series = pd.to_numeric(data[col], errors='coerce')  # type: ignore[assignment]
+            # Fix #1: coerce to numeric before comparison
+            # TotalCharges is still a raw string at validation time
+            col_numeric: pd.Series = pd.to_numeric(
+                data[col], errors='coerce'
+            )  # type: ignore[assignment]
             min_val: int = rules['min']
             max_val: int = rules['max']
-            mask: pd.Series = col_numeric.notna() & ((col_numeric < min_val) | (col_numeric > max_val))  # type: ignore[operator]
+            mask: pd.Series = col_numeric.notna() & (
+                (col_numeric < min_val) | (col_numeric > max_val)
+            )  # type: ignore[operator]
             invalid = data[mask]
             if len(invalid) > 0:
-                errors.append(f"{col}: {len(invalid)} values outside range [{rules['min']}, {rules['max']}]")
+                errors.append(
+                    f"{col}: {len(invalid)} values outside range "
+                    f"[{rules['min']}, {rules['max']}]"
+                )
                 logger.warning(f"Extreme values in {col}: {invalid[col].tolist()}")
 
     # Check for duplicate customerIDs
@@ -103,7 +119,8 @@ def handle_new_customers(data: pd.DataFrame) -> pd.DataFrame:
     if new_customer_count > 0:
         logger.info(f"Detected {new_customer_count} new customers (tenure=0)")
 
-        # Assign 0 compatible with the column's current dtype (string from raw CSV or numeric after coercion)
+        # Assign 0 compatible with the column's current dtype
+        # (string from raw CSV or numeric after coercion)
         tc_dtype = data['TotalCharges'].dtype
         zero_val: float | str = 0.0 if pd.api.types.is_numeric_dtype(tc_dtype) else "0"
         data.loc[new_customer_mask, 'TotalCharges'] = zero_val
@@ -128,10 +145,11 @@ def handle_unseen_categories(data: pd.DataFrame, encoder) -> pd.DataFrame:
         if col not in data.columns:
             continue
 
-        # Fix #3: use list() not set() — set() triggers ambiguous truth-value error with numpy arrays via isin()
-        known_categories = list(encoder.categories_[
-            CATEGORICAL_COLUMNS.index(col)
-        ])
+        # Fix #3: use list() not set() — set() triggers ambiguous truth-value
+        # error with numpy arrays via isin()
+        known_categories = list(
+            encoder.categories_[CATEGORICAL_COLUMNS.index(col)]
+        )
 
         # Find unknown values
         unknown_mask = ~data[col].isin(known_categories)
@@ -170,7 +188,9 @@ def handle_missing_values(data: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, i
             if missing_count > 0:
                 data[col] = data[col].fillna(value)
                 imputation_report[col] = missing_count
-                logger.info(f"Imputed {missing_count} missing values in {col} with {value}")
+                logger.info(
+                    f"Imputed {missing_count} missing values in {col} with {value}"
+                )
 
     # Drop rows with remaining missing values (critical features)
     critical_features = ['customerID', 'tenure', 'MonthlyCharges']
@@ -263,18 +283,24 @@ def preprocess_new_data(data: pd.DataFrame, scaler, encoder) -> pd.DataFrame:
     )
 
     # Step 7: Combine features (preserve flags)
-    flag_cols = [c for c in data.columns if 'flag' in c.lower() or c == 'Is_New_Customer']
+    flag_cols = [
+        c for c in data.columns
+        if 'flag' in c.lower() or c == 'Is_New_Customer'
+    ]
+    flag_data = data[flag_cols] if flag_cols else pd.DataFrame()
     processed_data = pd.concat([
         data[IDENTIFIER_COLUMN],
         numerical_df,
         categorical_df,
-        data[flag_cols] if flag_cols else pd.DataFrame()
+        flag_data
     ], axis=1)
 
     return processed_data
 
 
-def predict(data: pd.DataFrame, model, scaler, encoder, threshold: float = 0.5) -> pd.DataFrame:
+def predict(
+    data: pd.DataFrame, model, scaler, encoder, threshold: float = 0.5
+) -> pd.DataFrame:
     """
     Make predictions on new data with comprehensive edge case handling.
 
@@ -336,7 +362,7 @@ def predict(data: pd.DataFrame, model, scaler, encoder, threshold: float = 0.5) 
     has_outlier = results.get('Has_Outlier_Flag', pd.Series([0]))
     outlier_count = has_outlier.sum() if has_outlier is not None else 0
 
-    logger.info(f"Predictions completed:")
+    logger.info("Predictions completed:")
     logger.info(f"  Total samples: {len(results)}")
     logger.info(f"  New customers: {new_customer_count}")
     logger.info(f"  With outlier flags: {outlier_count}")
@@ -345,7 +371,90 @@ def predict(data: pd.DataFrame, model, scaler, encoder, threshold: float = 0.5) 
     return results
 
 
-def predict_from_file(input_file: str, output_file: str | None = None, threshold: float = 0.5):
+def validate_output_schema(results: pd.DataFrame) -> Tuple[bool, List[str]]:
+    """
+    Validate the prediction output's columns and value ranges before saving.
+
+    Checks:
+    - All required columns are present.
+    - Churn_Probability is numeric, non-null, and within [0, 1].
+    - Predicted_Churn contains only 0/1.
+    - Risk_Level values are within the allowed set (Low/Medium/High); NaN is
+      tolerated since pd.cut yields NaN for a probability of exactly 0.0.
+
+    Returns:
+        (is_valid, error_messages)
+    """
+    errors: List[str] = []
+
+    # 1. Required columns present
+    missing = REQUIRED_OUTPUT_COLUMNS - set(results.columns)
+    if missing:
+        errors.append(f"Missing output columns: {sorted(missing)}")
+
+    # 2. Churn_Probability numeric and within [0, 1]
+    if 'Churn_Probability' in results.columns:
+        proba = pd.to_numeric(results['Churn_Probability'], errors='coerce')
+        # Ensure proba is a Series (handle scalar case)
+        if isinstance(proba, (float, int)):
+            na_count = 1 if pd.isna(proba) else 0
+        elif isinstance(proba, pd.Series):
+            series_proba: pd.Series = proba
+            na_count = int(series_proba.isna().sum())
+        else:
+            # Fallback for any other type - try to convert to Series
+            try:
+                proba_series = pd.Series([proba])
+                na_count = int(proba_series.isna().sum())
+            except Exception:
+                na_count = 0
+        if na_count > 0:
+            errors.append(f"Churn_Probability has {na_count} non-numeric/NaN values")
+        # Handle out_of_range check for both Series and scalar
+        if isinstance(proba, (float, int)):
+            out_of_range = not pd.isna(proba) and (proba < 0 or proba > 1)
+            has_out_of_range = out_of_range
+        elif isinstance(proba, pd.Series):
+            out_of_range = pd.notna(proba) & ((proba < 0) | (proba > 1))
+            has_out_of_range = out_of_range.any()
+        else:
+            # Fallback for any other type - try to convert to Series
+            try:
+                proba_series = pd.Series([proba])
+                out_of_range = pd.notna(proba_series) & ((proba_series < 0) | (proba_series > 1))
+                has_out_of_range = out_of_range.any()
+            except Exception:
+                has_out_of_range = False
+        if has_out_of_range:
+            count = 1 if isinstance(proba, (float, int)) else int(out_of_range.sum())
+            errors.append(
+                f"Churn_Probability has {count} values outside [0, 1]"
+            )
+
+    # 3. Predicted_Churn strictly 0/1
+    if 'Predicted_Churn' in results.columns:
+        invalid = ~results['Predicted_Churn'].isin([0, 1])
+        if invalid.any():
+            errors.append(
+                f"Predicted_Churn has {int(invalid.sum())} values not in {{0, 1}}"
+            )
+
+    # 4. Risk_Level membership (ignore NaN)
+    if 'Risk_Level' in results.columns:
+        rl = results['Risk_Level'].astype('object')
+        invalid_rl = rl.notna() & ~rl.isin(VALID_RISK_LEVELS)
+        if invalid_rl.any():
+            bad = sorted(set(rl[invalid_rl].tolist()))
+            errors.append(
+                f"Risk_Level has invalid values: {bad}"
+            )
+
+    return len(errors) == 0, errors
+
+
+def predict_from_file(
+    input_file: str, output_file: str | None = None, threshold: float = 0.5
+):
     """
     Load data from file, make predictions with edge case handling, and save results.
 
@@ -376,6 +485,13 @@ def predict_from_file(input_file: str, output_file: str | None = None, threshold
     # Make predictions
     results = predict(new_data, model, scaler, encoder, threshold)
 
+    # Validate output schema (column names + value ranges) before saving
+    is_valid, schema_errors = validate_output_schema(results)
+    if not is_valid:
+        logger.error(f"Output schema validation failed: {schema_errors}")
+        raise ValueError(f"Prediction output failed schema validation: {schema_errors}")
+    logger.info("Output schema validation passed")
+
     # Save results
     if output_file:
         results.to_csv(output_file, index=False)
@@ -391,10 +507,12 @@ def predict_from_file(input_file: str, output_file: str | None = None, threshold
             f.write(f"Churn rate: {results['Predicted_Churn'].mean():.1%}\n\n")
 
             if 'Is_New_Customer' in results.columns:
-                new_churn = results[results['Is_New_Customer'] == 1]['Predicted_Churn'].mean()
+                new_churn = results[
+                    results['Is_New_Customer'] == 1
+                ]['Predicted_Churn'].mean()
                 f.write(f"New customer churn rate: {new_churn:.1%}\n")
 
-            f.write(f"\nRisk distribution:\n")
+            f.write("\nRisk distribution:\n")
             f.write(str(results['Risk_Level'].value_counts()))
 
         logger.info(f"Summary saved to {summary_file}")

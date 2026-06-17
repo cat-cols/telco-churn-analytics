@@ -5,13 +5,15 @@ Runs the complete workflow: preprocessing → training → results.
 
 import argparse
 import logging
-from pathlib import Path
 
 from preprocess import preprocess_data
 from train import train_models
 from utils import load_parquet, load_pickle
 import pandas as pd
-from config import MODELS_DIR, RESULTS_FILE, PROCESSED_DATA_DIR, IDENTIFIER_COLUMN, RESULTS_DIR
+from config import (
+    MODELS_DIR, RESULTS_FILE, PROCESSED_DATA_DIR,
+    IDENTIFIER_COLUMN, RESULTS_DIR
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,29 +75,40 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     logger.info("\n" + "=" * 60)
     logger.info("PIPELINE COMPLETED SUCCESSFULLY")
     logger.info("=" * 60)
-    logger.info(f"\nBest Model Performance:")
+    logger.info("\nBest Model Performance:")
     logger.info(f"  Accuracy: {results_df['accuracy'].max():.4f}")
     logger.info(f"  ROC-AUC: {results_df['roc_auc'].max():.4f}")
     logger.info(f"  Precision: {results_df['precision'].max():.4f}")
     logger.info(f"  Recall: {results_df['recall'].max():.4f}")
     logger.info(f"  F1-Score: {results_df['f1'].max():.4f}")
 
-    logger.info(f"\nGenerated Files:")
+    logger.info("\nGenerated Files:")
     logger.info(f"  - Processed data: {PROCESSED_DATA_DIR}")
     logger.info(f"  - Trained models: {MODELS_DIR}")
     logger.info(f"  - Results: {RESULTS_DIR / 'test_predictions.csv'}")
-    logger.info(f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}")
+    logger.info(
+        f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}"
+    )
 
     return best_model, results_df, predictions_df
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run the complete churn prediction pipeline')
-    parser.add_argument('--skip-preprocessing', action='store_true',
-                        help='Skip preprocessing step (use existing processed data)')
-    parser.add_argument('--skip-training', action='store_true',
-                        help='Skip training step (use existing model)')
+    parser = argparse.ArgumentParser(
+        description='Run the complete churn prediction pipeline'
+    )
+    parser.add_argument(
+        '--skip-preprocessing', action='store_true',
+        help='Skip preprocessing step (use existing processed data)'
+    )
+    parser.add_argument(
+        '--skip-training', action='store_true',
+        help='Skip training step (use existing model)'
+    )
 
     args = parser.parse_args()
 
-    run_full_pipeline(skip_preprocessing=args.skip_preprocessing, skip_training=args.skip_training)
+    run_full_pipeline(
+        skip_preprocessing=args.skip_preprocessing,
+        skip_training=args.skip_training
+    )

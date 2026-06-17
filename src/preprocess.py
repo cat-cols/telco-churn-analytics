@@ -3,7 +3,6 @@ Data preprocessing pipeline for Telco Churn Prediction.
 """
 
 import pandas as pd
-import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import logging
@@ -34,26 +33,36 @@ def validate_schema(data: pd.DataFrame) -> None:
     errors: list[str] = []
 
     # Check required columns
-    required_columns = set(NUMERICAL_COLUMNS + CATEGORICAL_COLUMNS + [IDENTIFIER_COLUMN, TARGET_COLUMN])
+    required_columns = set(
+        NUMERICAL_COLUMNS + CATEGORICAL_COLUMNS +
+        [IDENTIFIER_COLUMN, TARGET_COLUMN]
+    )
     missing = required_columns - set(data.columns)
     if missing:
         errors.append(f"Missing required columns: {sorted(missing)}")
 
     # Check minimum row count
     if len(data) < MIN_EXPECTED_ROWS:
-        errors.append(f"Dataset has only {len(data)} rows (expected >= {MIN_EXPECTED_ROWS})")
+        errors.append(
+            f"Dataset has only {len(data)} rows (expected >= {MIN_EXPECTED_ROWS})"
+        )
 
     # Check key column dtypes (only for columns that are present)
     for col, expected_dtype in EXPECTED_DTYPES.items():
         if col in data.columns and str(data[col].dtype) != expected_dtype:
             errors.append(
-                f"Column '{col}' has dtype '{data[col].dtype}', expected '{expected_dtype}'"
+                f"Column '{col}' has dtype '{data[col].dtype}', "
+                f"expected '{expected_dtype}'"
             )
 
     if errors:
-        raise ValueError("Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
+        raise ValueError(
+            "Schema validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
 
-    logger.info(f"Schema validation passed: {len(data)} rows, {len(data.columns)} columns")
+    logger.info(
+            f"Schema validation passed: {len(data)} rows, {len(data.columns)} columns"
+        )
 
 
 def preprocess_data():
@@ -68,7 +77,9 @@ def preprocess_data():
     validate_schema(data)
 
     # Convert TotalCharges from string to numeric
-    data['TotalCharges'] = pd.to_numeric(data['TotalCharges'], errors='coerce')
+    data['TotalCharges'] = pd.to_numeric(
+        data['TotalCharges'], errors='coerce'
+    )
     logger.info("Converted TotalCharges from string to numeric")
 
     # Clean data
@@ -76,7 +87,9 @@ def preprocess_data():
     logger.info(f"Cleaned data shape: {data_clean.shape}")
 
     # Separate features and target
-    features: pd.DataFrame = data_clean.drop(columns=[TARGET_COLUMN])  # type: ignore[assignment]
+    features: pd.DataFrame = data_clean.drop(
+            columns=[TARGET_COLUMN]
+        )  # type: ignore[assignment]
     labels: pd.Series = data_clean[TARGET_COLUMN]  # type: ignore[assignment]
 
     # Train/test split
@@ -111,7 +124,8 @@ def preprocess_data():
     )
 
     # Encode categorical features
-    # Fix #2: handle_unknown='ignore' — encoder raised ValueError on unseen categories mapped to 'Unknown'
+    # Fix #2: handle_unknown='ignore' — encoder raised ValueError
+    # on unseen categories mapped to 'Unknown'
     encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
     X_train_categorical: Any = X_train[CATEGORICAL_COLUMNS]
     encoder.fit(X_train_categorical)

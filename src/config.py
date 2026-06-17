@@ -57,7 +57,8 @@ MODEL_CONFIGS: dict[str, dict[str, Any]] = {
 }
 
 # Balanced variants — class_weight='balanced' to address low recall from class imbalance
-# GradientBoostingClassifier does not accept class_weight; handled via sample_weight in train.py
+# GradientBoostingClassifier does not accept class_weight;
+# handled via sample_weight in train.py
 MODEL_CONFIGS_BALANCED: dict[str, dict[str, Any]] = {
     'logistic_regression_balanced': {
         'random_state': RANDOM_STATE,
@@ -104,3 +105,10 @@ SCALER_FILE = PROCESSED_DATA_DIR / "scaler.pkl"
 ENCODER_FILE = PROCESSED_DATA_DIR / "encoder.pkl"
 BEST_MODEL_FILE = MODELS_DIR / "best_model.pkl"
 RESULTS_FILE = MODELS_DIR / "model_comparison_results.csv"
+
+# Engineered feature files
+TRAIN_ENGINEERED_FILE = PROCESSED_DATA_DIR / "train_engineered.parquet"
+TEST_ENGINEERED_FILE = PROCESSED_DATA_DIR / "test_engineered.parquet"
+FEATURE_ENGINEERING_OBJECTS_FILE = (
+    PROCESSED_DATA_DIR / "feature_engineering_objects.pkl"
+)

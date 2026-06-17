@@ -8,7 +8,6 @@ Stages:
 4. Select overall best by ROC-AUC; save artifact and full comparison table
 """
 
-import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -47,15 +46,15 @@ def train_models():
 
     # Load processed data
     X_train = load_parquet(TRAIN_DATA_FILE)
-    X_test  = load_parquet(TEST_DATA_FILE)
+    X_test = load_parquet(TEST_DATA_FILE)
     y_train = load_parquet(TRAIN_LABELS_FILE).squeeze()
-    y_test  = load_parquet(TEST_LABELS_FILE).squeeze()
+    y_test = load_parquet(TEST_LABELS_FILE).squeeze()
 
     logger.info(f"Training data shape: {X_train.shape}")
     logger.info(f"Test data shape: {X_test.shape}")
 
     X_train_f = X_train.drop(columns=[IDENTIFIER_COLUMN])
-    X_test_f  = X_test.drop(columns=[IDENTIFIER_COLUMN])
+    X_test_f = X_test.drop(columns=[IDENTIFIER_COLUMN])
 
     # Sample weights for GB balanced (GradientBoosting has no class_weight param)
     sample_weights = compute_sample_weight('balanced', y_train)
@@ -79,7 +78,10 @@ def train_models():
         metrics['stage'] = 'balanced' if 'balanced' in name else 'baseline'
         results.append(metrics)
         trained_models[name] = model
-        logger.info(f"  {name}: ROC-AUC={metrics['roc_auc']:.4f}  Recall={metrics['recall']:.4f}")
+        logger.info(
+            f"  {name}: ROC-AUC={metrics['roc_auc']:.4f}  "
+            f"Recall={metrics['recall']:.4f}"
+        )
 
     # Pick best from stages 1+2 to tune
     stage_df = pd.DataFrame(results)
@@ -88,14 +90,16 @@ def train_models():
 
     # --- Stage 3: GridSearchCV on the base model family of the winner ---
     base_family = best_pre_tune.replace('_balanced', '')
-    param_grid  = PARAM_GRIDS.get(base_family, {})
+    param_grid = PARAM_GRIDS.get(base_family, {})
 
     if param_grid:
         logger.info(f"Running GridSearchCV on {base_family} ...")
         base_estimator_map = {
-            'logistic_regression': LogisticRegression(random_state=RANDOM_STATE, max_iter=1000),
-            'random_forest':       RandomForestClassifier(random_state=RANDOM_STATE),
-            'gradient_boosting':   GradientBoostingClassifier(random_state=RANDOM_STATE),
+            'logistic_regression': LogisticRegression(
+                random_state=RANDOM_STATE, max_iter=1000
+            ),
+            'random_forest': RandomForestClassifier(random_state=RANDOM_STATE),
+            'gradient_boosting': GradientBoostingClassifier(random_state=RANDOM_STATE),
         }
         grid_search = GridSearchCV(
             base_estimator_map[base_family],
@@ -114,17 +118,21 @@ def train_models():
         tuned_metrics['stage'] = 'tuned'
         results.append(tuned_metrics)
         trained_models[f'{base_family}_tuned'] = tuned_model
-        logger.info(f"  Tuned: ROC-AUC={tuned_metrics['roc_auc']:.4f}  Recall={tuned_metrics['recall']:.4f}")
+        logger.info(
+            f"  Tuned: ROC-AUC={tuned_metrics['roc_auc']:.4f}  "
+            f"Recall={tuned_metrics['recall']:.4f}"
+        )
 
     # --- Stage 4: Select overall best and save ---
     results_df = pd.DataFrame(results)
-    best_name  = results_df.loc[results_df['roc_auc'].idxmax(), 'model']
+    best_name = results_df.loc[results_df['roc_auc'].idxmax(), 'model']
     best_model = trained_models[best_name]
 
+    recall_value = results_df.loc[results_df['model'] == best_name, 'recall'].values[0]
     logger.info(
         f"Overall best: {best_name}  "
         f"ROC-AUC={results_df['roc_auc'].max():.4f}  "
-        f"Recall={results_df.loc[results_df['model'] == best_name, 'recall'].values[0]:.4f}"
+        f"Recall={recall_value:.4f}"
     )
 
     save_pickle(best_model, BEST_MODEL_FILE)
