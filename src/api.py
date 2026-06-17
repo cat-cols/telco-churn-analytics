@@ -120,10 +120,14 @@ def _build_summary(results: pd.DataFrame, threshold: float) -> Dict[str, Any]:
     """Build summary metrics while safely handling empty outputs."""
     total_customers = len(results)
     predicted_churners = (
-        _series_sum_as_int(pd.Series(results["Predicted_Churn"])) if total_customers else 0
+        _series_sum_as_int(pd.Series(results["Predicted_Churn"]))
+        if total_customers
+        else 0
     )
     churn_rate = (
-        _series_mean_as_float(pd.Series(results["Predicted_Churn"])) if total_customers else 0.0
+        _series_mean_as_float(pd.Series(results["Predicted_Churn"]))
+        if total_customers
+        else 0.0
     )
 
     summary: Dict[str, Any] = {
@@ -131,15 +135,17 @@ def _build_summary(results: pd.DataFrame, threshold: float) -> Dict[str, Any]:
         "predicted_churners": predicted_churners,
         "churn_rate": churn_rate,
         "threshold_used": threshold,
-        "risk_distribution": results["Risk_Level"].value_counts().to_dict()
-        if total_customers
-        else {},
+        "risk_distribution": (
+            results["Risk_Level"].value_counts().to_dict() if total_customers else {}
+        ),
     }
 
     if "Is_New_Customer" in results.columns and total_customers:
         new_customers = _series_sum_as_int(pd.Series(results["Is_New_Customer"]))
         if new_customers > 0:
-            new_customer_mask = _numeric_series(pd.Series(results["Is_New_Customer"])) == 1
+            new_customer_mask = (
+                _numeric_series(pd.Series(results["Is_New_Customer"])) == 1
+            )
             new_churn_rate = _series_mean_as_float(
                 results.loc[new_customer_mask, "Predicted_Churn"]
             )
@@ -243,12 +249,18 @@ class CustomerRecord(BaseModel):
 
     gender: GenderType = Field(..., description="Customer gender")
     Partner: YesNoType = Field(..., description="Whether the customer has a partner")
-    Dependents: YesNoType = Field(..., description="Whether the customer has dependents")
-    PhoneService: YesNoType = Field(..., description="Whether the customer has phone service")
+    Dependents: YesNoType = Field(
+        ..., description="Whether the customer has dependents"
+    )
+    PhoneService: YesNoType = Field(
+        ..., description="Whether the customer has phone service"
+    )
     MultipleLines: MultipleLinesType = Field(
         ..., description="Whether the customer has multiple lines"
     )
-    InternetService: InternetServiceType = Field(..., description="Internet service type")
+    InternetService: InternetServiceType = Field(
+        ..., description="Internet service type"
+    )
     OnlineSecurity: InternetDependentServiceType = Field(
         ..., description="Whether the customer has online security"
     )
@@ -277,10 +289,14 @@ class CustomerRecord(BaseModel):
     def validate_service_consistency(self) -> CustomerRecord:
         """Reject internally inconsistent service combinations early."""
         if self.PhoneService == "No" and self.MultipleLines != "No phone service":
-            raise ValueError("MultipleLines must be 'No phone service' when PhoneService is 'No'")
+            raise ValueError(
+                "MultipleLines must be 'No phone service' when PhoneService is 'No'"
+            )
 
         if self.PhoneService == "Yes" and self.MultipleLines == "No phone service":
-            raise ValueError("MultipleLines cannot be 'No phone service' when PhoneService is 'Yes'")
+            raise ValueError(
+                "MultipleLines cannot be 'No phone service' when PhoneService is 'Yes'"
+            )
 
         internet_fields = [
             self.OnlineSecurity,
@@ -383,7 +399,9 @@ async def predict_records(
         raise
     except (ValueError, KeyError, TypeError, RuntimeError) as exc:
         logger.exception("Error during prediction")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Prediction failed: {exc}"
+        ) from exc
 
 
 @app.post("/predict/file", response_model=PredictionResponse)
