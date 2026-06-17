@@ -16,13 +16,12 @@ import pandas as pd
 import pytest
 from sklearn.preprocessing import OneHotEncoder
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
-
-from predict import (
+from src.predict import (
     handle_missing_values,
     handle_new_customers,
     handle_unseen_categories,
     validate_input_data,
+    validate_output_schema,
 )
 
 
@@ -203,6 +202,65 @@ class TestHandleUnseenCategories:
 # ---------------------------------------------------------------------------
 # handle_missing_values
 # ---------------------------------------------------------------------------
+
+class TestValidateOutputSchema:
+
+    def _valid_output(self, **overrides) -> pd.DataFrame:
+        base = pd.DataFrame({
+            "CustomerID": ["T0001", "T0002"],
+            "Churn_Probability": [0.12, 0.84],
+            "Predicted_Churn": [0, 1],
+            "Risk_Level": pd.Categorical(["Low", "High"],
+                                         categories=["Low", "Medium", "High"]),
+        })
+        for col, vals in overrides.items():
+            base[col] = vals
+        return base
+
+    def test_valid_output_passes(self):
+        is_valid, errors = validate_output_schema(self._valid_output())
+        assert is_valid is True
+        assert errors == []
+
+    def test_missing_required_column_reported(self):
+        data = self._valid_output().drop(columns=["Risk_Level"])
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is False
+        assert any("Risk_Level" in e for e in errors)
+
+    def test_probability_out_of_range_reported(self):
+        data = self._valid_output(Churn_Probability=[1.5, -0.2])
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is False
+        assert any("Churn_Probability" in e and "[0, 1]" in e for e in errors)
+
+    def test_nan_probability_reported(self):
+        data = self._valid_output(Churn_Probability=[float("nan"), 0.5])
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is False
+        assert any("Churn_Probability" in e for e in errors)
+
+    def test_predicted_churn_not_binary_reported(self):
+        data = self._valid_output(Predicted_Churn=[0, 2])
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is False
+        assert any("Predicted_Churn" in e for e in errors)
+
+    def test_invalid_risk_level_reported(self):
+        data = self._valid_output()
+        data["Risk_Level"] = ["Low", "Critical"]
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is False
+        assert any("Risk_Level" in e for e in errors)
+
+    def test_nan_risk_level_tolerated(self):
+        """pd.cut yields NaN for probability exactly 0.0 — should not fail validation."""
+        data = self._valid_output()
+        data["Risk_Level"] = pd.Categorical(["Low", None],
+                                            categories=["Low", "Medium", "High"])
+        is_valid, errors = validate_output_schema(data)
+        assert is_valid is True
+
 
 class TestHandleMissingValues:
 

@@ -13,10 +13,8 @@ from typing import Any
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
-
-from preprocess import validate_schema
-from config import NUMERICAL_COLUMNS, CATEGORICAL_COLUMNS, IDENTIFIER_COLUMN, TARGET_COLUMN
+from src.preprocess import validate_schema
+from src.config import NUMERICAL_COLUMNS, CATEGORICAL_COLUMNS, IDENTIFIER_COLUMN, TARGET_COLUMN
 
 
 # ---------------------------------------------------------------------------
