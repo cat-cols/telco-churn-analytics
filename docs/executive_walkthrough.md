@@ -8,18 +8,18 @@ Telecommunications companies face significant revenue loss due to customer churn
 
 We built a machine learning system that:
 - Analyzes customer behavior and demographics
-- Predicts churn probability with 80%+ accuracy
+- Predicts churn probability with ~79% accuracy and 0.835 ROC-AUC
 - Identifies key risk factors
 - Provides actionable insights for retention teams
 
 ## Key Results
 
 ### Model Performance
-- **Best Model**: Gradient Boosting / Random Forest
-- **Accuracy**: 80%+ on test data
-- **ROC-AUC**: 0.85+ (excellent discrimination)
-- **Precision**: 78% (reliable positive predictions)
-- **Recall**: 82% (catches most at-risk customers)
+- **Best Model (by ROC-AUC)**: Gradient Boosting (tuned)
+- **Accuracy**: ~79% on test data
+- **ROC-AUC**: 0.835 (good discrimination)
+- **Precision**: 65% at default threshold (reliable positive predictions)
+- **Recall**: up to 79% with class-weighted models / threshold tuning (catches most at-risk customers)
 
 ### Business Impact
 - **Early Warning**: Identify at-risk customers before they leave
@@ -30,44 +30,44 @@ We built a machine learning system that:
 ## Risk Factors Identified
 
 ### Top Churn Predictors
-1. **Contract Type**: Monthly contracts = 3x higher churn risk
-2. **Tenure**: New customers (<12 months) = 2.5x higher risk
-3. **Support Calls**: High support volume = strong churn indicator
-4. **Payment Behavior**: Delays predict churn likelihood
-5. **Usage Patterns**: Low engagement correlates with churn
+1. **Contract Type**: Month-to-month customers churn at 42.7% vs. 2.8% for two-year (~15x)
+2. **Tenure**: New customers (<12 months) churn at 47.4% vs. 9.5% after 4 years
+3. **Payment Method**: Electronic check payers churn at 45.3% (~3x automatic methods)
+4. **Internet Service**: Fiber optic customers churn at 41.9% vs. 19.0% for DSL
+5. **Senior Citizen**: Seniors churn at 41.7% vs. 23.6% for non-seniors
 
 ## Customer Segmentation
 
-### High-Risk Segment (25% of customers)
-- Monthly contracts
+### High-Risk Segment
+- Month-to-month contract
 - Short tenure (<12 months)
-- High support needs
-- **Churn Rate**: 75%
+- Electronic check payment / fiber optic internet
+- **Churn Rate**: ~43-47%
 
-### Medium-Risk Segment (45% of customers)
-- Quarterly contracts
-- Medium tenure (12-36 months)
-- Moderate usage
-- **Churn Rate**: 50%
+### Medium-Risk Segment
+- One-year contract
+- Medium tenure (13-48 months)
+- DSL internet
+- **Churn Rate**: ~11-29%
 
-### Low-Risk Segment (30% of customers)
-- Annual contracts
-- Long tenure (>36 months)
-- Low support needs
-- **Churn Rate**: 20%
+### Low-Risk Segment
+- Two-year contract
+- Long tenure (>48 months)
+- Automatic payment methods
+- **Churn Rate**: ~3-10%
 
 ## Recommended Actions
 
 ### Immediate Actions (0-3 months)
 1. **Implement Early Warning System**: Deploy model to identify at-risk customers weekly
-2. **Target High-Risk Segment**: Focus retention efforts on monthly contract customers
-3. **New Customer Onboarding**: Enhanced support for first 3 months
-4. **Payment Flexibility**: Offer flexible payment options for struggling customers
+2. **Target High-Risk Segment**: Focus retention efforts on month-to-month customers
+3. **New Customer Onboarding**: Enhanced support for first 12 months (highest churn window)
+4. **Payment Migration**: Move electronic-check payers to automatic payment methods
 
 ### Medium-Term Actions (3-6 months)
-1. **Contract Conversion Incentives**: Encourage monthly → annual upgrades
-2. **Proactive Support**: Reach out to customers with high support call volume
-3. **Usage Engagement Programs**: Increase engagement for low-usage customers
+1. **Contract Conversion Incentives**: Encourage month-to-month → one/two year upgrades
+2. **Fiber Optic Experience Review**: Investigate why fiber customers churn at 41.9%
+3. **Targeted Offers**: Engage high-monthly-charge customers with retention offers
 4. **Retention Dashboard**: Real-time monitoring of at-risk customers
 
 ### Long-Term Actions (6-12 months)

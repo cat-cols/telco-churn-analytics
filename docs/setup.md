@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Prerequisites
-- Python 3.8 or higher
+- Python 3.8 or higher (developed and tested on Python 3.12)
 - Git (for cloning the repository)
 - Virtual environment tool (venv or conda)
 
@@ -16,33 +16,43 @@ cd telco-churn-analytics
 ### 2. Create Virtual Environment
 Using venv:
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 Using conda:
 ```bash
-conda create -n telco-churn python=3.8
+conda create -n telco-churn python=3.12
 conda activate telco-churn
 ```
 
 ### 3. Install Dependencies
-The project uses the following key packages:
-- pandas
-- scikit-learn
-- pyarrow
-- kagglehub
-- jupyter
-
-Install dependencies:
-```bash
-pip install pandas scikit-learn pyarrow kagglehub jupyter
-```
-
-Or if using a requirements file (if available):
+The recommended way to install everything is from `requirements.txt`:
 ```bash
 pip install -r requirements.txt
 ```
+
+This installs the project's dependencies (versions pinned in `requirements.txt`):
+
+| Package | Purpose |
+|---------|---------|
+| `pandas`, `numpy` | Data manipulation |
+| `scikit-learn` | Modeling, preprocessing, metrics |
+| `pyarrow` | Reading/writing Parquet files |
+| `matplotlib`, `seaborn` | Visualization |
+| `shap` | Model interpretability (SHAP analysis in `04_results.ipynb`) |
+| `jupyter`, `ipykernel` | Running the notebooks |
+
+**Optional extras** (commented out in `requirements.txt`; install only if needed):
+- `xgboost`, `lightgbm` — additional gradient-boosting models in the comparison.
+- `imbalanced-learn` — the SMOTE benchmark in `03_modeling.ipynb`.
+
+```bash
+pip install xgboost lightgbm imbalanced-learn   # optional
+```
+
+> Note: `kagglehub`/`kaggle` are **not** project dependencies. They are only needed if
+> you choose to download the dataset via the Kaggle API (see Step 4).
 
 ### 4. Download the Dataset
 The IBM Telco Customer Churn dataset should be placed in the `data/` directory.
@@ -51,7 +61,7 @@ The IBM Telco Customer Churn dataset should be placed in the `data/` directory.
 - **File Name**: `telco_customer_churn.csv`
 - **Source**: IBM Telco Customer Churn Dataset
 - **Format**: CSV
-- **Size**: 440,832 records × 12 features
+- **Size**: 7,043 records × 21 columns (19 features + customerID + Churn target)
 
 **How to Obtain:**
 
@@ -83,7 +93,7 @@ For more details about the dataset, see [data_source.md](data_source.md).
 ### 5. Verify Installation
 Run the following to verify your setup:
 ```bash
-python -c "import pandas; import sklearn; import pyarrow; print('All dependencies installed successfully')"
+python3 -c "import pandas, numpy, sklearn, pyarrow, matplotlib, seaborn, shap; print('All dependencies installed successfully')"
 ```
 
 ## Project Structure
@@ -91,11 +101,17 @@ python -c "import pandas; import sklearn; import pyarrow; print('All dependencie
 telco-churn-analytics/
 ├── data/
 │   ├── raw/              # Raw dataset files
-│   └── processed/        # Processed/transformed data
+│   └── processed/        # Processed data + fitted scaler/encoder
 ├── docs/                 # Documentation files
-├── notebooks/            # Jupyter notebooks for analysis
-├── src/                  # Source code (if any)
-└── README.md            # Project overview
+├── models/               # Trained model artifacts (.pkl) + comparison CSV
+├── notebooks/            # Jupyter notebooks (01_eda → 04_results)
+├── notes/                # In-depth learning/reference guides
+├── results/              # Generated plots, reports, predictions
+├── scripts/              # Standalone analysis scripts (e.g. threshold_analysis.py)
+├── src/                  # Pipeline source (preprocess, train, predict, config)
+├── tests/                # Pytest unit & integration tests
+├── requirements.txt      # Python dependencies
+└── README.md             # Project overview
 ```
 
 ## IDE Setup

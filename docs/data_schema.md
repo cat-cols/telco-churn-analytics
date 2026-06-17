@@ -83,10 +83,10 @@
 
 ```
 Customer (1) ────── (1) Churn Status
-Customer (1) ────── (1) Subscription
 Customer (1) ────── (1) Contract
-Customer (1) ────── (N) Support Calls
-Customer (1) ────── (N) Usage Events
+Customer (1) ────── (1) PaymentMethod
+Customer (1) ────── (1) InternetService
+Customer (1) ────── (N) Add-on Services (OnlineSecurity, TechSupport, Streaming, ...)
 ```
 
 ### Data Integrity Rules

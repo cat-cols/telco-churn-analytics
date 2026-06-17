@@ -16,27 +16,65 @@ Predict customer churn for a telecommunications company using customer demograph
 
 ### 2. Data Cleaning
 **Missing Value Handling:**
-- Identified 1 row with null values across all columns (row index 199,295)
-- Removed the incomplete row using `data.dropna()`
-- Final dataset: 440,832 complete records
+- `TotalCharges` is stored as a string and contains 11 blank values, all belonging to new customers with `tenure = 0`
+- Converted `TotalCharges` to numeric with `pd.to_numeric(errors='coerce')`, producing 11 `NaN` values
+- Removed the 11 incomplete rows after conversion
+- Final dataset: 7,032 complete records (from 7,043 raw)
 
-**Rationale:** Complete case analysis is appropriate here since only 1 row was affected (0.0002% of data).
+**Rationale:** Complete case analysis is appropriate here since only 11 rows were affected (0.16% of data).
 
 ### 3. Exploratory Data Analysis (EDA)
 **Categorical Variable Distribution:**
-- Subscription Type: Examined value counts and proportions
-  - Basic: 32.4%
-  - Standard: 33.8%
-  - Premium: 33.7%
-- Contract Length: Examined value counts and proportions
-  - Annual: 40.2%
-  - Quarterly: 40.0%
-  - Monthly: 19.8%
+- Contract: Examined value counts and proportions
+  - Month-to-month: 55.0%
+  - Two year: 24.1%
+  - One year: 20.9%
+- PaymentMethod: Examined value counts and proportions
+  - Electronic check: 33.6%
+  - Mailed check: 22.9%
+  - Bank transfer (automatic): 21.9%
+  - Credit card (automatic): 21.6%
+- InternetService: Fiber optic 44.0%, DSL 34.4%, No 21.7%
 
 **Numerical Variable Statistics:**
 - Computed descriptive statistics (mean, std, min, max, quartiles)
 - Identified ranges and distributions for all numerical features
-- Noted churn rate: 56.7% (indicating class imbalance)
+- Noted churn rate: 26.54% (indicating class imbalance)
+
+**Churn Rate Breakdown by Key Features (Telco dataset, n=7,043, overall churn 26.54%):**
+
+Segment churn rates computed in `notebooks/01_eda.ipynb` highlight the strongest churn drivers:
+
+*By Contract type:*
+
+| Contract | Count | Churned | Churn Rate |
+|----------|------:|--------:|-----------:|
+| Month-to-month | 3,875 | 1,655 | 42.71% |
+| One year | 1,473 | 166 | 11.27% |
+| Two year | 1,695 | 48 | 2.83% |
+
+*By tenure band (months):*
+
+| Tenure Band | Count | Churned | Churn Rate |
+|-------------|------:|--------:|-----------:|
+| 0-12 | 2,186 | 1,037 | 47.44% |
+| 13-24 | 1,024 | 294 | 28.71% |
+| 25-48 | 1,594 | 325 | 20.39% |
+| 49-72 | 2,239 | 213 | 9.51% |
+
+*By PaymentMethod:*
+
+| Payment Method | Count | Churned | Churn Rate |
+|----------------|------:|--------:|-----------:|
+| Electronic check | 2,365 | 1,071 | 45.29% |
+| Mailed check | 1,612 | 308 | 19.11% |
+| Bank transfer (automatic) | 1,544 | 258 | 16.71% |
+| Credit card (automatic) | 1,522 | 232 | 15.24% |
+
+**Key takeaways:**
+- **Contract** is the strongest signal: month-to-month customers churn at 42.71% vs 2.83% for two-year contracts.
+- **Tenure** is strongly inverse to churn: new customers (0-12 months) churn at 47.44%, dropping to 9.51% after 4 years.
+- **Electronic check** payers churn at 45.29%, roughly 3x the automatic payment methods (~15-17%).
 
 ### 4. Feature Engineering
 
@@ -45,21 +83,31 @@ Predict customer churn for a telecommunications company using customer demograph
 - **Target (y):** Churn column (binary classification)
 
 #### Feature Categorization
-**Numerical Features (7 variables):**
-- Age
-- Tenure
-- Usage Frequency
-- Support Calls
-- Payment Delay
-- Total Spend
-- Last Interaction
+**Numerical Features (4 variables):**
+- SeniorCitizen (0/1 indicator)
+- tenure
+- MonthlyCharges
+- TotalCharges (after string-to-numeric conversion)
 
-**Categorical Features (2 variables):**
-- Subscription Type
-- Contract Length
+**Categorical Features (15 variables):**
+- gender
+- Partner
+- Dependents
+- PhoneService
+- MultipleLines
+- InternetService
+- OnlineSecurity
+- OnlineBackup
+- DeviceProtection
+- TechSupport
+- StreamingTV
+- StreamingMovies
+- Contract
+- PaperlessBilling
+- PaymentMethod
 
 **Identifier:**
-- CustomerID (retained for tracking, excluded from modeling)
+- customerID (retained for tracking, excluded from modeling)
 
 ### 5. Train/Test Split
 **Parameters:**
@@ -95,8 +143,8 @@ Predict customer churn for a telecommunications company using customer demograph
 4. Convert sparse matrix to dense format for DataFrame creation
 
 **Output:** Binary columns for each category
-- Subscription Type → Subscription Type_Basic, Subscription Type_Standard, Subscription Type_Premium
-- Contract Length → Contract Length_Annual, Contract Length_Quarterly, Contract Length_Monthly
+- Contract → Contract_Month-to-month, Contract_One year, Contract_Two year
+- PaymentMethod → PaymentMethod_Electronic check, PaymentMethod_Mailed check, PaymentMethod_Bank transfer (automatic), PaymentMethod_Credit card (automatic)
 
 **Rationale:** OneHotEncoder is appropriate for nominal categorical variables with no inherent ordering. It creates binary features that can be effectively used by most machine learning algorithms.
 
@@ -125,7 +173,7 @@ Based on the problem characteristics:
 - **Neural Networks**: For complex pattern recognition
 
 ### Evaluation Metrics
-Given the class imbalance (56.7% churn rate):
+Given the class imbalance (26.54% churn rate):
 - **Primary:** AUC-ROC (robust to imbalance)
 - **Secondary:** Precision, Recall, F1-Score
 - **Additional:** Confusion Matrix, Accuracy
@@ -134,6 +182,46 @@ Given the class imbalance (56.7% churn rate):
 - K-fold cross-validation (k=5 or k=10)
 - Stratified sampling to maintain churn rate distribution
 - Repeated runs for stability assessment
+
+## Model Interpretability (SHAP)
+
+To explain *how* the best model (Gradient Boosting) makes its predictions, we apply **SHAP
+(SHapley Additive exPlanations)** to the test set in `notebooks/04_results.ipynb`. SHAP assigns
+every feature a signed contribution (in log-odds) to each individual prediction; contributions
+are additive and sum to the model output. We use `TreeExplainer`, the exact algorithm for tree
+ensembles.
+
+**Outputs saved to `results/`:**
+- `shap_feature_importance.png` — global importance ranked by mean |SHAP|.
+- `shap_summary.png` — beeswarm plot showing magnitude *and* direction of each feature's impact.
+
+### Top 5 Churn Drivers
+
+Ranked by mean |SHAP| across all test customers. *Direction* is the sign of the correlation
+between the feature's value and its SHAP value (how the feature pushes the prediction):
+
+| Rank | Feature | Mean \|SHAP\| | Direction |
+|-----:|---------|-------------:|-----------|
+| 1 | `Contract_Month-to-month` | 0.6602 | Increases churn |
+| 2 | `tenure` | 0.4410 | Reduces churn (longer tenure → less churn) |
+| 3 | `OnlineSecurity_No` | 0.2645 | Increases churn |
+| 4 | `TechSupport_No` | 0.2078 | Increases churn |
+| 5 | `MonthlyCharges` | 0.2003 | Increases churn (higher charges → more churn) |
+
+### Business Insights
+
+- **Contract type dominates.** Being on a month-to-month contract is by far the strongest churn
+  signal — consistent with the EDA segment rates (42.71% churn for month-to-month vs 2.83% for
+  two-year). *Action:* incentivize migration to 1- or 2-year contracts.
+- **Tenure protects.** The longer a customer has stayed, the less likely they are to churn; risk
+  is concentrated in the first year. *Action:* focus retention/onboarding effort on new customers.
+- **Missing add-on services raise risk.** Not having `OnlineSecurity` or `TechSupport` both push
+  customers toward churn. *Action:* bundle or promote these services, especially to fiber customers.
+- **Higher monthly charges increase churn.** Price sensitivity is real. *Action:* review pricing
+  and target discounts/loyalty offers at high-bill, high-risk customers.
+
+These SHAP-derived drivers corroborate the correlational EDA findings while adding a per-feature,
+direction-aware, model-grounded explanation suitable for stakeholders.
 
 ## Assumptions and Limitations
 
@@ -146,7 +234,7 @@ Given the class imbalance (56.7% churn rate):
 ### Limitations
 1. Class imbalance may require specialized techniques (SMOTE, class weights)
 2. No temporal information (time-series analysis not possible)
-3. CustomerID and Gender were not used in feature engineering
+3. customerID is excluded from feature engineering (used only for tracking); gender is included as a categorical feature
 4. No feature selection performed (all features used)
 
 ## Reproducibility

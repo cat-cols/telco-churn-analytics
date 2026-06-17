@@ -72,7 +72,13 @@ This document describes the IBM Telco Customer Churn dataset, including all colu
 #### Numerical Variables
 - **tenure**: Mean 32.4 months, Std 24.6
 - **MonthlyCharges**: Mean $64.76, Std $30.09
-- **Churn Rate**: 26.5% (imbalanced dataset)
+
+#### Class Balance Analysis
+- **Churn Rate**: 26.54% (1,869 customers)
+- **Non-Churn Rate**: 73.46% (5,174 customers)
+- **Imbalance Ratio**: 2.77:1 (Non-churn to churn)
+- **Total Records**: 7,043 customers
+- **Missing Values**: 0 in Churn column
 
 ## Feature Categories
 

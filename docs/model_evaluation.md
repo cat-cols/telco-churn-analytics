@@ -3,7 +3,7 @@
 ## Evaluation Framework
 
 ### Primary Metrics
-- **ROC-AUC**: Primary metric for imbalanced classification (56.7% churn rate)
+- **ROC-AUC**: Primary metric for imbalanced classification (26.54% churn rate)
 - **Accuracy**: Overall correctness
 - **Precision**: Reliability of positive predictions
 - **Recall**: Ability to catch churn cases
@@ -17,32 +17,37 @@
 ## Model Performance Summary
 
 ### Model Comparison
-| Model | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
-|-------|----------|-----------|--------|----------|---------|
-| Logistic Regression | ~0.75 | ~0.73 | ~0.78 | ~0.75 | ~0.82 |
-| Random Forest | ~0.80 | ~0.78 | ~0.82 | ~0.80 | ~0.86 |
-| Gradient Boosting | ~0.81 | ~0.79 | ~0.83 | ~0.81 | ~0.87 |
-| XGBoost (optional) | ~0.82 | ~0.80 | ~0.84 | ~0.82 | ~0.88 |
-| LightGBM (optional) | ~0.82 | ~0.80 | ~0.84 | ~0.82 | ~0.88 |
+
+Results on the held-out test set (`models/model_comparison_results.csv`):
+
+| Model | Stage | Accuracy | Precision | Recall | F1-Score | ROC-AUC |
+|-------|-------|----------|-----------|--------|----------|---------|
+| Logistic Regression | baseline | 0.787 | 0.621 | 0.516 | 0.564 | 0.832 |
+| Random Forest | baseline | 0.778 | 0.607 | 0.463 | 0.525 | 0.810 |
+| Gradient Boosting | baseline | 0.789 | 0.630 | 0.500 | 0.557 | 0.834 |
+| Logistic Regression (balanced) | balanced | 0.732 | 0.497 | **0.791** | 0.611 | 0.832 |
+| Random Forest (balanced) | balanced | 0.756 | 0.536 | 0.610 | 0.571 | 0.810 |
+| Gradient Boosting (balanced) | balanced | 0.735 | 0.501 | 0.775 | 0.609 | 0.832 |
+| Gradient Boosting (tuned) | tuned | 0.792 | 0.647 | 0.476 | 0.549 | **0.835** |
 
 ### Best Model Selection
-- **Primary Choice**: Gradient Boosting or XGBoost
-- **Backup**: Random Forest (good interpretability)
+- **Primary Choice (by ROC-AUC)**: Gradient Boosting (tuned) — ROC-AUC 0.835
+- **Best for Recall**: Logistic Regression (balanced) — recall 0.791
 - **Baseline**: Logistic Regression (fast, interpretable)
 
 ## Performance Analysis
 
 ### ROC-AUC Analysis
-- **Best Model**: 0.87-0.88 ROC-AUC
-- **Interpretation**: Excellent discrimination ability
+- **Best Model**: 0.835 ROC-AUC (Gradient Boosting tuned)
+- **Interpretation**: Good discrimination ability
 - **Comparison**: Significantly better than random (0.5)
 - **Business Impact**: Reliable risk scoring
 
 ### Precision-Recall Trade-off
-- **Precision**: ~0.80 (80% of predicted churners actually churn)
-- **Recall**: ~0.84 (84% of actual churners identified)
-- **Balance**: Good equilibrium for business use
-- **Threshold Optimization**: Can adjust based on business priorities
+- **Default-threshold tuned GB**: precision 0.647, recall 0.476 (conservative)
+- **Class-weighted models** lift recall substantially: LR balanced reaches recall 0.791 (precision 0.497)
+- **Threshold tuning**: Lowering the tuned GB threshold to 0.30 yields recall 0.773 / precision 0.522 / F1 0.623
+- **Balance**: Choose operating point based on retention budget vs. coverage of at-risk customers
 
 ### Confusion Matrix Analysis
 - **True Positives**: Correctly identified churners
@@ -53,11 +58,11 @@
 ## Feature Importance
 
 ### Top Predictive Features
-1. **Tenure**: Strongest predictor (longer tenure = lower churn)
-2. **Contract Length**: Monthly contracts = higher churn
-3. **Support Calls**: High volume = increased risk
-4. **Total Spend**: Complex relationship with churn
-5. **Usage Frequency**: Engagement indicator
+1. **Contract**: Month-to-month = much higher churn (42.7% vs. 2.8% for two-year)
+2. **tenure**: Longer tenure = lower churn (47.4% at 0-12mo vs. 9.5% at 49-72mo)
+3. **InternetService**: Fiber optic associated with higher churn (41.9%)
+4. **PaymentMethod**: Electronic check = higher churn (45.3%)
+5. **MonthlyCharges / TotalCharges**: Higher monthly charges linked to churn
 
 ### Feature Engineering Impact
 - **StandardScaler**: Improved model convergence
@@ -67,9 +72,9 @@
 ## Model Robustness
 
 ### Cross-Validation
-- **Strategy**: K-fold cross-validation recommended
-- **Stability**: Models show consistent performance across folds
-- **Variance**: Low variance indicates robust model
+- **Strategy**: 5-fold stratified cross-validation on the best model (Gradient Boosting), run on all available data (train + test) in `notebooks/03_modeling.ipynb`
+- **Result**: ROC-AUC = 0.8477 ± 0.0046 across folds (range 0.8429–0.8555)
+- **Stability**: Fold-to-fold std < 0.01 confirms ROC-AUC is robust and **not split-dependent**; the single-split test value (0.8340) differs from the CV mean only by normal sampling noise
 
 ### Overfitting Analysis
 - **Train-Test Gap**: Minimal (<5% difference)
@@ -79,8 +84,9 @@
 ## Class Imbalance Handling
 
 ### Current Approach
-- **Imbalance**: 56.7% churn rate (moderate imbalance)
-- **Handling**: Models handle moderate imbalance well
+- **Imbalance**: 26.54% churn rate (minority class)
+- **Handling**: `class_weight='balanced'` applied to LR and RF; GB uses `sample_weight`
+- **Impact**: Recall lifted from 0.516 (LR baseline) to 0.791 (LR balanced)
 - **Metrics**: ROC-AUC appropriate for imbalanced data
 
 ### Future Improvements
@@ -150,6 +156,8 @@
 - [x] ROC-AUC curve generated
 - [x] Overfitting assessed
 - [x] Business thresholds defined
-- [ ] Cross-validation implemented (future)
+- [x] Class imbalance handled (class weights / sample weights)
+- [x] Hyperparameter tuning (GridSearchCV on Gradient Boosting)
+- [x] Cross-validation implemented — 5-fold stratified CV in `notebooks/03_modeling.ipynb` (GB ROC-AUC 0.8477 ± 0.0046; not split-dependent)
 - [ ] SHAP values calculated (future)
 - [ ] A/B testing framework (future)
