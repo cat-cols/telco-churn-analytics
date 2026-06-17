@@ -91,16 +91,15 @@ async def lifespan(app: FastAPI):
 # Pydantic model for input validation
 class CustomerRecord(BaseModel):
     """Pydantic model for a single customer record."""
+
     customerID: str = Field(..., description="Unique customer identifier")
 
     # Numerical fields
     SeniorCitizen: int = Field(
-        ..., ge=0, le=1,
-        description="Whether the customer is a senior citizen (0 or 1)"
+        ..., ge=0, le=1, description="Whether the customer is a senior citizen (0 or 1)"
     )
     tenure: int = Field(
-        ..., ge=0,
-        description="Number of months the customer has been with the company"
+        ..., ge=0, description="Number of months the customer has been with the company"
     )
     MonthlyCharges: float = Field(
         ..., ge=0, description="Monthly amount charged to the customer"
@@ -111,9 +110,7 @@ class CustomerRecord(BaseModel):
 
     # Categorical fields
     gender: str = Field(..., description="Customer gender (Male/Female)")
-    Partner: str = Field(
-        ..., description="Whether the customer has a partner (Yes/No)"
-    )
+    Partner: str = Field(..., description="Whether the customer has a partner (Yes/No)")
     Dependents: str = Field(
         ..., description="Whether the customer has dependents (Yes/No)"
     )
@@ -121,35 +118,42 @@ class CustomerRecord(BaseModel):
         ..., description="Whether the customer has phone service (Yes/No)"
     )
     MultipleLines: str = Field(
-        ..., description="Whether the customer has multiple lines "
-        "(Yes/No/No phone service)"
+        ...,
+        description="Whether the customer has multiple lines "
+        "(Yes/No/No phone service)",
     )
     InternetService: str = Field(
         ..., description="Internet service type (DSL/Fiber optic/No)"
     )
     OnlineSecurity: str = Field(
-        ..., description="Whether the customer has online security "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has online security "
+        "(Yes/No/No internet service)",
     )
     OnlineBackup: str = Field(
-        ..., description="Whether the customer has online backup "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has online backup "
+        "(Yes/No/No internet service)",
     )
     DeviceProtection: str = Field(
-        ..., description="Whether the customer has device protection "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has device protection "
+        "(Yes/No/No internet service)",
     )
     TechSupport: str = Field(
-        ..., description="Whether the customer has tech support "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has tech support "
+        "(Yes/No/No internet service)",
     )
     StreamingTV: str = Field(
-        ..., description="Whether the customer has streaming TV "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has streaming TV "
+        "(Yes/No/No internet service)",
     )
     StreamingMovies: str = Field(
-        ..., description="Whether the customer has streaming movies "
-        "(Yes/No/No internet service)"
+        ...,
+        description="Whether the customer has streaming movies "
+        "(Yes/No/No internet service)",
     )
     Contract: str = Field(
         ..., description="Contract type (Month-to-month/One year/Two year)"
@@ -158,24 +162,29 @@ class CustomerRecord(BaseModel):
         ..., description="Whether the customer has paperless billing (Yes/No)"
     )
     PaymentMethod: str = Field(
-        ..., description="Payment method (Electronic check/Mailed check/"
-        "Bank transfer/Credit card)"
+        ...,
+        description="Payment method (Electronic check/Mailed check/"
+        "Bank transfer/Credit card)",
     )
 
 
 class PredictionRequest(BaseModel):
     """Request model for batch prediction with customer records."""
+
     records: List[CustomerRecord] = Field(
         ..., description="List of customer records to predict"
     )
     threshold: float = Field(
-        default=0.5, ge=0.0, le=1.0,
-        description="Classification threshold for churn prediction"
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Classification threshold for churn prediction",
     )
 
 
 class PredictionResponse(BaseModel):
     """Response model for prediction results."""
+
     predictions: List[Dict[str, Any]] = Field(
         ..., description="Prediction results for each customer"
     )
@@ -189,7 +198,7 @@ app = FastAPI(
     title="Telco Churn Prediction API",
     description="API for predicting customer churn in telecommunications",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -203,7 +212,7 @@ async def health_check():
         "status": "healthy",
         "model_loaded": model is not None,
         "scaler_loaded": scaler is not None,
-        "encoder_loaded": encoder is not None
+        "encoder_loaded": encoder is not None,
     }
 
 
@@ -232,8 +241,8 @@ async def predict_records(request: PredictionRequest):
                     "predicted_churners": 0,
                     "churn_rate": 0.0,
                     "threshold_used": request.threshold,
-                    "risk_distribution": {}
-                }
+                    "risk_distribution": {},
+                },
             )
 
         # Convert Pydantic models to DataFrame
@@ -251,12 +260,12 @@ async def predict_records(request: PredictionRequest):
             logger.error(f"Output schema validation failed: {schema_errors}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Prediction output validation failed: {schema_errors}"
+                detail=f"Prediction output validation failed: {schema_errors}",
             )
 
         # Convert DataFrame to JSON-serializable format
         # predictions = json.loads(results.to_json(orient='records'))
-        json_str = results.to_json(orient='records')
+        json_str = results.to_json(orient="records")
         if json_str is None:
             predictions = []
         else:
@@ -265,25 +274,29 @@ async def predict_records(request: PredictionRequest):
         # Create summary statistics
         summary = {
             "total_customers": len(results),
-            "predicted_churners": int(results['Predicted_Churn'].sum().item()),
-            "churn_rate": float(results['Predicted_Churn'].mean().item()),
+            "predicted_churners": int(results["Predicted_Churn"].sum().item()),
+            "churn_rate": float(results["Predicted_Churn"].mean().item()),
             "threshold_used": request.threshold,
-            "risk_distribution": results['Risk_Level'].value_counts().to_dict()
+            "risk_distribution": results["Risk_Level"].value_counts().to_dict(),
         }
 
         # Add new customer stats if available
-        if 'Is_New_Customer' in results.columns:
-            new_customers = results['Is_New_Customer'].sum()
+        if "Is_New_Customer" in results.columns:
+            new_customers = results["Is_New_Customer"].sum()
             if new_customers > 0:
-                new_churn_rate = results[
-                    results['Is_New_Customer'] == 1
-                ]['Predicted_Churn'].mean()
-                summary.update({
-                    "new_customers": int(new_customers.item()),
-                    "new_customer_churn_rate": float(
-                        new_churn_rate.item() if not pd.isna(new_churn_rate).any() else 0.0
-                    )
-                })
+                new_churn_rate = results[results["Is_New_Customer"] == 1][
+                    "Predicted_Churn"
+                ].mean()
+                summary.update(
+                    {
+                        "new_customers": int(new_customers.item()),
+                        "new_customer_churn_rate": float(
+                            new_churn_rate.item()
+                            if not pd.isna(new_churn_rate)
+                            else 0.0
+                        ),
+                    }
+                )
 
         logger.info(
             f"Prediction completed: {summary['predicted_churners']} churners "
@@ -312,13 +325,13 @@ async def predict_from_uploaded_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=503, detail="Model or preprocessors not loaded")
 
     # Validate file type
-    if not file.filename or not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
 
     temp_file_path = None
     try:
         # Save uploaded file to temporary location
-        with NamedTemporaryFile(mode='w+b', suffix='.csv', delete=False) as temp_file:
+        with NamedTemporaryFile(mode="w+b", suffix=".csv", delete=False) as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
@@ -338,11 +351,11 @@ async def predict_from_uploaded_file(file: UploadFile = File(...)):
             logger.error(f"Output schema validation failed: {schema_errors}")
             raise HTTPException(
                 status_code=500,
-                detail=f"Prediction output validation failed: {schema_errors}"
+                detail=f"Prediction output validation failed: {schema_errors}",
             )
 
         # Convert DataFrame to JSON-serializable format
-        json_str = results.to_json(orient='records')
+        json_str = results.to_json(orient="records")
         if json_str is None:
             predictions = []
         else:
@@ -351,25 +364,29 @@ async def predict_from_uploaded_file(file: UploadFile = File(...)):
         # Create summary statistics
         summary = {
             "total_customers": len(results),
-            "predicted_churners": int(results['Predicted_Churn'].sum().item()),
-            "churn_rate": float(results['Predicted_Churn'].mean().item()),
+            "predicted_churners": int(results["Predicted_Churn"].sum().item()),
+            "churn_rate": float(results["Predicted_Churn"].mean().item()),
             "threshold_used": 0.5,  # Default threshold for file upload
-            "risk_distribution": results['Risk_Level'].value_counts().to_dict()
+            "risk_distribution": results["Risk_Level"].value_counts().to_dict(),
         }
 
         # Add new customer stats if available
-        if 'Is_New_Customer' in results.columns:
-            new_customers = results['Is_New_Customer'].sum()
+        if "Is_New_Customer" in results.columns:
+            new_customers = results["Is_New_Customer"].sum()
             if new_customers > 0:
-                new_churn_rate = results[
-                    results['Is_New_Customer'] == 1
-                ]['Predicted_Churn'].mean()
-                summary.update({
-                    "new_customers": int(new_customers.item()),
-                    "new_customer_churn_rate": float(
-                        new_churn_rate.item() if not pd.isna(new_churn_rate).any() else 0.0
-                    )
-                })
+                new_churn_rate = results[results["Is_New_Customer"] == 1][
+                    "Predicted_Churn"
+                ].mean()
+                summary.update(
+                    {
+                        "new_customers": int(new_customers.item()),
+                        "new_customer_churn_rate": float(
+                            new_churn_rate.item()
+                            if not pd.isna(new_churn_rate)
+                            else 0.0
+                        ),
+                    }
+                )
 
         logger.info(
             f"File prediction completed: {summary['predicted_churners']} churners "
@@ -388,8 +405,7 @@ async def predict_from_uploaded_file(file: UploadFile = File(...)):
         if temp_file_path:
             Path(temp_file_path).unlink(missing_ok=True)
         raise HTTPException(
-            status_code=400,
-            detail="Uploaded CSV file is empty or invalid"
+            status_code=400, detail="Uploaded CSV file is empty or invalid"
         )
     except Exception as e:
         logger.error(f"Error processing uploaded file: {e}")

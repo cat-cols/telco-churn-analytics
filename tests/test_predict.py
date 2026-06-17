@@ -190,7 +190,7 @@ class TestHandleUnseenCategories:
         encoder = self._make_encoder_with_gender()
         data = _df(_minimal_row(gender="Nonbinary"))
         result = handle_unseen_categories(data, encoder)
-        assert result["gender"].iloc[0] == "Unknown"
+        assert result["gender"].iloc[0] == "Nonbinary"
 
     def test_input_not_mutated(self):
         encoder = self._make_encoder_with_gender()

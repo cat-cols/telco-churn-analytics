@@ -11,13 +11,15 @@ from train import train_models
 from utils import load_parquet, load_pickle
 import pandas as pd
 from config import (
-    MODELS_DIR, RESULTS_FILE, PROCESSED_DATA_DIR,
-    IDENTIFIER_COLUMN, RESULTS_DIR
+    MODELS_DIR,
+    RESULTS_FILE,
+    PROCESSED_DATA_DIR,
+    IDENTIFIER_COLUMN,
+    RESULTS_DIR,
 )
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -60,15 +62,17 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     y_proba = best_model.predict_proba(X_test_features)[:, 1]
 
     # Create predictions dataframe
-    predictions_df = pd.DataFrame({
-        'CustomerID': X_test[IDENTIFIER_COLUMN],
-        'Actual_Churn': y_test,
-        'Predicted_Churn': y_pred,
-        'Churn_Probability': y_proba
-    })
+    predictions_df = pd.DataFrame(
+        {
+            "CustomerID": X_test[IDENTIFIER_COLUMN],
+            "Actual_Churn": y_test,
+            "Predicted_Churn": y_pred,
+            "Churn_Probability": y_proba,
+        }
+    )
 
     # Save predictions
-    predictions_df.to_csv(RESULTS_DIR / 'test_predictions.csv', index=False)
+    predictions_df.to_csv(RESULTS_DIR / "test_predictions.csv", index=False)
     logger.info(f"✓ Predictions saved to {RESULTS_DIR / 'test_predictions.csv'}")
 
     # Print summary
@@ -86,29 +90,28 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     logger.info(f"  - Processed data: {PROCESSED_DATA_DIR}")
     logger.info(f"  - Trained models: {MODELS_DIR}")
     logger.info(f"  - Results: {RESULTS_DIR / 'test_predictions.csv'}")
-    logger.info(
-        f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}"
-    )
+    logger.info(f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}")
 
     return best_model, results_df, predictions_df
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Run the complete churn prediction pipeline'
+        description="Run the complete churn prediction pipeline"
     )
     parser.add_argument(
-        '--skip-preprocessing', action='store_true',
-        help='Skip preprocessing step (use existing processed data)'
+        "--skip-preprocessing",
+        action="store_true",
+        help="Skip preprocessing step (use existing processed data)",
     )
     parser.add_argument(
-        '--skip-training', action='store_true',
-        help='Skip training step (use existing model)'
+        "--skip-training",
+        action="store_true",
+        help="Skip training step (use existing model)",
     )
 
     args = parser.parse_args()
 
     run_full_pipeline(
-        skip_preprocessing=args.skip_preprocessing,
-        skip_training=args.skip_training
+        skip_preprocessing=args.skip_preprocessing, skip_training=args.skip_training
     )
