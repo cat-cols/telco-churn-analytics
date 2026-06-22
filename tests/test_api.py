@@ -18,14 +18,23 @@ from src.api import app
 client = TestClient(app)
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _trigger_lifespan():
+    """Enter the TestClient context so FastAPI's lifespan runs and loads
+    model artifacts into app.state. Without this, the lifespan startup never
+    fires and every endpoint returns 503 (model not loaded)."""
+    with client:
+        yield
+
+
 class TestHealthEndpoint:
     """Test the health check endpoint."""
-    
+
     def test_health_check_success(self):
         """Test health check when model is loaded successfully."""
         response = client.get("/health")
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["status"] == "healthy"
         assert data["model_loaded"] is True
@@ -35,7 +44,7 @@ class TestHealthEndpoint:
 
 class TestPredictRecordsEndpoint:
     """Test the /predict/records endpoint for JSON input."""
-    
+
     def test_single_record_prediction(self):
         """Test prediction for a single customer record."""
         # Create a valid customer record
@@ -61,30 +70,30 @@ class TestPredictRecordsEndpoint:
             "PaperlessBilling": "Yes",
             "PaymentMethod": "Electronic check"
         }
-        
+
         request_data = {
             "records": [record],
             "threshold": 0.5
         }
-        
+
         response = client.post("/predict/records", json=request_data)
         assert response.status_code == 200
-        
+
         data = response.json()
         assert "predictions" in data
         assert "summary" in data
-        
+
         # Check predictions structure
         predictions = data["predictions"]
         assert len(predictions) == 1
-        
+
         prediction = predictions[0]
         assert "CustomerID" in prediction
         assert "Churn_Probability" in prediction
         assert "Predicted_Churn" in prediction
         assert "Risk_Level" in prediction
         assert prediction["CustomerID"] == "test-customer-001"
-        
+
         # Check summary structure
         summary = data["summary"]
         assert summary["total_customers"] == 1
@@ -92,7 +101,7 @@ class TestPredictRecordsEndpoint:
         assert "churn_rate" in summary
         assert summary["threshold_used"] == 0.5
         assert "risk_distribution" in summary
-    
+
     def test_batch_prediction(self):
         """Test prediction for multiple customer records."""
         # Create multiple records
@@ -142,23 +151,23 @@ class TestPredictRecordsEndpoint:
                 "PaymentMethod": "Mailed check"
             }
         ]
-        
+
         request_data = {
             "records": records,
             "threshold": 0.3
         }
-        
+
         response = client.post("/predict/records", json=request_data)
         assert response.status_code == 200
-        
+
         data = response.json()
         predictions = data["predictions"]
         summary = data["summary"]
-        
+
         assert len(predictions) == 2
         assert summary["total_customers"] == 2
         assert summary["threshold_used"] == 0.3
-    
+
     def test_custom_threshold(self):
         """Test prediction with custom threshold."""
         record = {
@@ -183,19 +192,19 @@ class TestPredictRecordsEndpoint:
             "PaperlessBilling": "Yes",
             "PaymentMethod": "Electronic check"
         }
-        
+
         request_data = {
             "records": [record],
             "threshold": 0.8  # High threshold
         }
-        
+
         response = client.post("/predict/records", json=request_data)
         assert response.status_code == 200
-        
+
         data = response.json()
         summary = data["summary"]
         assert summary["threshold_used"] == 0.8
-    
+
     def test_invalid_threshold(self):
         """Test prediction with invalid threshold values."""
         record = {
@@ -220,33 +229,33 @@ class TestPredictRecordsEndpoint:
             "PaperlessBilling": "Yes",
             "PaymentMethod": "Electronic check"
         }
-        
+
         # Test threshold > 1.0
         request_data = {
             "records": [record],
             "threshold": 1.5
         }
-        
+
         response = client.post("/predict/records", json=request_data)
         assert response.status_code == 422  # Validation error
-        
+
         # Test threshold < 0.0
         request_data["threshold"] = -0.1
-        
+
         response = client.post("/predict/records", json=request_data)
         assert response.status_code == 422  # Validation error
-    
+
     def test_empty_records_list(self):
         """Test prediction with empty records list."""
         request_data = {
             "records": [],
             "threshold": 0.5
         }
-        
+
         response = client.post("/predict/records", json=request_data)
         # This should work but return empty results
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["predictions"] == []
         assert data["summary"]["total_customers"] == 0
@@ -254,7 +263,7 @@ class TestPredictRecordsEndpoint:
 
 class TestPredictFileEndpoint:
     """Test the /predict/file endpoint for CSV file uploads."""
-    
+
     def test_csv_file_upload(self):
         """Test prediction with CSV file upload."""
         # Create test CSV data
@@ -448,8 +457,14 @@ class TestAPIIntegration:
         }
         
         response = client.post("/predict/records", json=request_data)
-        # Should handle unseen categories gracefully
-        assert response.status_code == 200
+        # The API enforces strict categorical schemas via Pydantic Literal
+        # types, so unseen values are rejected up front with a 422 validation
+        # error rather than being silently passed to the model.
+        assert response.status_code == 422
+
+        error_text = response.text.lower()
+        assert "gender" in error_text
+        assert "partner" in error_text
 
 
 if __name__ == "__main__":
