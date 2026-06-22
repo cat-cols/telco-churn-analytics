@@ -4,7 +4,7 @@
 
 ## 📊 Business Impact
 
-**27% of customers churn** - we can identify **77% of them before they leave** with our prediction system. This enables proactive retention that can save significant revenue.
+**27% of customers churn** - we can identify **~82% of them before they leave** (recall at a 0.25 threshold) with our prediction system. This enables proactive retention that can save significant revenue.
 
 ### Key Business Questions Answered:
 
@@ -20,9 +20,9 @@ Quantifies impact of each factor
 
 **3. How accurate is this?**
 
-83-85% ROC-AUC performance
+~84% ROC-AUC performance (0.835 for the best model)
 Stable across data samples
-77% recall at optimal threshold
+~82% recall at the 0.25 operating threshold
 
 **4. What should we do?**
 
@@ -47,9 +47,9 @@ Based on our analysis, these actions will have the biggest impact:
 ## 📈 Analysis Results
 
 Our **statistical analysis** reveals:
-- **83.5% prediction accuracy** for identifying at-risk customers
-- **77% of potential churners** identified through data patterns
-- **61% precision** in targeting retention efforts
+- **0.835 ROC-AUC** for ranking at-risk customers (79% raw accuracy)
+- **~82% of potential churners** identified at the 0.25 operating threshold
+- **~49% precision** at that threshold (65% precision at the default 0.50)
 - **Statistically significant findings** across customer segments
 
 ![Analysis Results](results/model_performance_dashboard.png)
@@ -260,18 +260,19 @@ jupyter notebook notebooks/
 ## 🤖 Model Performance
 
 ### Best Model: **Gradient Boosting (tuned)**
-- **83.5% ROC-AUC** - Excellent discrimination ability
-- **77% recall** at optimal threshold - Catches most churners
-- **61% precision** - Reasonable false alarm rate
+- **0.835 ROC-AUC** - Strong discrimination ability
+- **~82% recall** at the 0.25 operating threshold - catches most churners
+- **~49% precision** at 0.25 (65% at the default 0.50 threshold)
+- **79% accuracy** at the default threshold
 - **Stable performance** - Cross-validated and reliable
 
 ### Performance Tradeoffs:
 | Metric | Conservative | **Balanced** | Aggressive |
 |---|---|---|---|
 | **Threshold** | 0.50 | **0.25** | 0.20 |
-| **Recall** | 48% | **77%** | 89% |
-| **Precision** | 65% | **50%** | 45% |
-| **F1 Score** | 55% | **60%** | 60% |
+| **Recall** | 48% | **82%** | 85% |
+| **Precision** | 65% | **49%** | 46% |
+| **F1 Score** | 55% | **62%** | 60% |
 
 **Recommendation**: Use balanced threshold (0.25) for optimal business impact.
 
