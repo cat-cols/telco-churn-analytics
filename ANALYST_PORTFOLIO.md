@@ -55,7 +55,7 @@ correlation_matrix = df.corr()
 
 ---
 
-## 💼 **Business Impact Delivered**
+## 💼 **Projected Business Impact**
 
 ### **Quantified Results**
 - **Identified 77% of at-risk customers** before churn
@@ -133,7 +133,7 @@ sns.histplot(data=df, x='tenure', hue='Churn', multiple='stack')
 
 ### **Technical Skills**
 - **Python**: pandas, numpy, scipy for statistical analysis
-- **SQL**: Database queries and data extraction
+- **SQL**: Churn-segment analysis in DuckDB — GROUP BY aggregates, CASE WHEN cohorts, window functions (`sql/churn_analysis.sql`)
 - **Excel**: Business calculations and reporting
 - **Visualization**: matplotlib, seaborn, Tableau-ready formats
 

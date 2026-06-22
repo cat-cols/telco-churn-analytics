@@ -63,7 +63,7 @@ This data analysis project uses the IBM Telco Customer Churn dataset (7,043 cust
 - ✅ **Data Visualization**: Charts, dashboards, and business intelligence reports
 - ✅ **Segmentation Analysis**: Customer cohorts and behavioral patterns
 - ✅ **Business Insights**: Actionable recommendations with ROI estimates
-- ✅ **SQL-Ready**: Structured for database queries and BI tools
+- ✅ **SQL Analysis Layer**: Churn-segment analysis written as DuckDB SQL (`sql/churn_analysis.sql`)
 
 ## 🗂️ Project Structure
 
@@ -92,8 +92,11 @@ telco-churn-analytics/
 │   ├── 03_feature_engineering.ipynb # Feature engineering
 │   ├── 04_modeling.ipynb           # Model training
 │   └── 05_results.ipynb            # Results visualization
+├── 🗄️ sql/                         # SQL analysis layer (DuckDB)
+│   └── churn_analysis.sql          # Churn-segment queries (GROUP BY, CASE, window fns)
 ├── ⚙️ scripts/                     # Utility scripts
-│   └── threshold_analysis.py       # Precision/recall analysis
+│   ├── threshold_analysis.py       # Precision/recall analysis
+│   └── sql_analysis.py             # Runs sql/churn_analysis.sql via DuckDB
 ├── 🚀 src/                         # Production pipeline
 │   ├── api.py                      # 🌐 FastAPI deployment service
 │   ├── config.py                   # Configuration constants
@@ -117,7 +120,7 @@ telco-churn-analytics/
 git clone https://github.com/cat-cols/telco-churn-analytics
 cd telco-churn-analytics
 
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 pip install -e .
@@ -128,7 +131,7 @@ pip install -e .
 ### 2. Run Full Pipeline
 ```bash
 # Complete pipeline: preprocessing → training → predictions
-python src/run_pipeline.py
+python3 src/run_pipeline.py
 ```
 
 ### 3. Deploy API Server
@@ -142,13 +145,13 @@ uvicorn src.api:app --reload --host 0.0.0.0 --port 8000
 ### 4. Make Predictions
 ```bash
 # Batch predictions
-python src/predict.py --input data/new_customers.csv --output predictions.csv
+python3 src/predict.py --input data/new_customers.csv --output predictions.csv
 
 # Interactive threshold analysis for business tuning
-python scripts/interactive_threshold.py
+python3 scripts/interactive_threshold.py
 
 # Detailed precision/recall analysis
-python scripts/threshold_analysis.py
+python3 scripts/threshold_analysis.py
 ```
 
 ## 🎯 Using the Results
@@ -207,14 +210,30 @@ bandit -r src/
 ### Interactive Analysis Tools
 ```bash
 # Interactive threshold tuning with visual feedback
-python scripts/interactive_threshold.py
+python3 scripts/interactive_threshold.py
 
 # Class imbalance analysis and recommendations
-python scripts/analyze_class_balance.py
+python3 scripts/analyze_class_balance.py
 
 # Comprehensive threshold sweep analysis
-python scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
+python3 scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
 ```
+
+### SQL Analysis Layer
+Run the churn-segment analysis as SQL (DuckDB queries the raw CSV directly — no server):
+```bash
+pip install -e ".[sql]"
+
+# Print all query results
+python3 scripts/sql_analysis.py
+
+# Export each result to results/sql/<name>.csv
+python3 scripts/sql_analysis.py --save
+
+# Run a single named query
+python3 scripts/sql_analysis.py --query churn_by_contract
+```
+Queries live in `sql/churn_analysis.sql` and cover churn rates by contract, payment method, internet service, and tenure cohorts, a compound high-risk segment, a window-function risk ranking, and revenue-at-risk.
 
 ### 3D Customer Segmentation
 Explore customer segments interactively in your browser:

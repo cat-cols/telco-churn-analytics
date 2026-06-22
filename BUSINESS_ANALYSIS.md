@@ -4,7 +4,7 @@
 
 **Key Finding**: 27% of customers churn, but we can identify **77% of at-risk customers** through data analysis, enabling targeted retention strategies.
 
-**Business Impact**: Potential **$2.3M annual savings** through proactive retention of high-value customers.
+**Business Impact**: Projected **~$351K annual savings (4.2x ROI)** through proactive retention of at-risk customers.
 
 ---
 
@@ -93,9 +93,17 @@ No internet: 7% churn
 - **Statistical significance testing** (p < 0.05)
 
 ### **Key Statistical Findings**
-- Contract type: χ² = 1,247.3, p < 0.001 (highly significant)
-- Payment method: χ² = 892.1, p < 0.001 (highly significant)
-- Tenure groups: χ² = 756.8, p < 0.001 (highly significant)
+
+Chi-square tests of independence (categorical feature vs. Churn), with Cramér's V as the effect size:
+
+| Feature | χ² | dof | p-value | Cramér's V |
+|---|---|---|---|---|
+| Contract type | 1,184.6 | 2 | < 0.001 | 0.410 |
+| Tenure band | 856.1 | 3 | < 0.001 | 0.349 |
+| Internet service | 732.3 | 2 | < 0.001 | 0.322 |
+| Payment method | 648.1 | 3 | < 0.001 | 0.303 |
+
+All four features are significantly associated with churn (p < 0.001). Contract type shows the strongest association, followed by tenure, internet service, and payment method.
 
 ---
 
@@ -137,7 +145,7 @@ No internet: 7% churn
 
 ---
 
-## 🎯 **Business Value Delivered**
+## 🎯 **Projected Business Value**
 
 ### **What This Analysis Provides**
 - **Data-driven decision making** for retention strategies
