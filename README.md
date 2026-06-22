@@ -123,6 +123,8 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
+> **No data download required.** The dataset (`data/raw/telco_customer_churn.csv`, ~955 KB, public IBM Telco Customer Churn data) ships with the repo, so the full pipeline runs end-to-end straight from a fresh clone.
+
 ### 2. Run Full Pipeline
 ```bash
 # Complete pipeline: preprocessing → training → predictions

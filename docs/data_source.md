@@ -75,4 +75,4 @@ This dataset is provided for educational and research purposes. When using this 
 
 ## Data Access
 
-The dataset should be placed in the `data/raw` directory as `telco_customer_churn.csv` for the preprocessing pipeline to work correctly.
+The dataset **ships with this repository** at `data/raw/telco_customer_churn.csv` (~955 KB), so no download or account is required — the pipeline runs end-to-end straight from a fresh clone. It is included under the dataset's educational/research license, with IBM credited as the original source (see *Data Usage Rights* above).
