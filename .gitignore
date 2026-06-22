@@ -77,6 +77,7 @@ data/*.parquet
 data/*.pkl
 data/*.json
 data/raw/*
+!data/raw/telco_customer_churn.csv
 data/processed/*
 !data/.gitkeep
 
