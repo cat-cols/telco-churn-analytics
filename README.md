@@ -1,6 +1,6 @@
 # Telco Churn Analytics
 
-� **Data analysis project identifying customer churn drivers** with actionable business insights. Built with Python, pandas, and statistical analysis for customer retention strategies.
+📊 **Data analysis project identifying customer churn drivers** with actionable business insights. Built with Python, pandas, and statistical analysis for customer retention strategies.
 
 ## 📊 Business Impact
 
@@ -89,8 +89,9 @@ telco-churn-analytics/
 ├── 📓 notebooks/                   # Exploratory analysis
 │   ├── 01_eda.ipynb                # Data exploration
 │   ├── 02_preprocessing.ipynb      # Data preparation
-│   ├── 03_modeling.ipynb           # Model training
-│   └── 04_results.ipynb            # Results visualization
+│   ├── 03_feature_engineering.ipynb # Feature engineering
+│   ├── 04_modeling.ipynb           # Model training
+│   └── 05_results.ipynb            # Results visualization
 ├── ⚙️ scripts/                     # Utility scripts
 │   └── threshold_analysis.py       # Precision/recall analysis
 ├── 🚀 src/                         # Production pipeline
@@ -236,7 +237,7 @@ python3 src/predict.py --input file.csv     # Make predictions
 ### Jupyter Exploration
 ```bash
 jupyter notebook notebooks/
-# Run in order: 01_eda → 02_preprocessing → 03_modeling → 04_results
+# Run in order: 01_eda → 02_preprocessing → 03_feature_engineering → 04_modeling → 05_results
 ```
 
 ## 📋 Dataset Overview
@@ -324,7 +325,22 @@ uvicorn src.api:app --host 0.0.0.0 --port 8000
 - Batch processing support
 - Health monitoring
 
-### 2. **Batch Processing**
+### 2. **Docker** (Containerized API)
+```bash
+# Build the image (bundles the trained model + preprocessors)
+docker build -t telco-churn-api .
+
+# Run the service
+docker run --rm -p 8000:8000 telco-churn-api
+
+# Verify it's healthy, then explore docs at http://localhost:8000/docs
+curl http://localhost:8000/health
+```
+- Self-contained, reproducible runtime
+- Built-in `HEALTHCHECK` against `/health`
+- Lean image (serving dependencies only)
+
+### 3. **Batch Processing**
 ```bash
 python3 src/predict.py --input customers.csv --output predictions.csv
 ```
@@ -332,7 +348,7 @@ python3 src/predict.py --input customers.csv --output predictions.csv
 - Summary statistics
 - Error reporting
 
-### 3. **Integration Ready**
+### 4. **Integration Ready**
 - REST API for web applications
 - CSV import for business tools
 - Python package for data science workflows
@@ -378,11 +394,11 @@ MIT License — see [LICENSE](LICENSE) for details.
 - **Revenue Growth**: Actionable insights for customer lifetime value
 - **Strategic Planning**: Evidence-based recommendations for leadership
 
-📧 **Contact**: [Your Email] | 📱 **LinkedIn**: [Your Profile] | 🌐 **Portfolio**: [Your Website]
+**GitHub**: [cat-cols](https://github.com/cat-cols) | **LinkedIn**: [https://www.linkedin.com/in/brandon-hardison/](https://www.linkedin.com/in/brandon-hardison/) | **Email**: [brandon.hardison@gmail.com](mailto:brandon.hardison@gmail.com)
 
 ---
 
-## �📞 Next Steps
+## 📞 Next Steps
 
 1. **Review Business Summary** - Understand the insights and recommendations
 2. **Try the API** - Start the server and test with your data
