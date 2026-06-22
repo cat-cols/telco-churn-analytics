@@ -1,0 +1,31 @@
+# Version control / IDE
+.git
+.github
+.vscode
+.gitignore
+.gitignore-pytemplate
+.pytest_cache
+
+# Virtual environments
+.venv
+venv
+
+# Python caches
+__pycache__
+*.pyc
+*.egg-info
+
+# Data not needed for serving (raw inputs / engineered intermediates)
+data/raw
+data/processed/*_engineered.parquet
+
+# Heavy / non-runtime assets
+notebooks
+results
+docs
+notes
+scripts
+archive
+
+# OS files
+.DS_Store
