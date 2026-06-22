@@ -46,6 +46,9 @@ imbalance = [
 interactive = [
     "plotly>=5.0.0"
 ]
+sql = [
+    "duckdb>=0.10.0"
+]
 pipeline = [
     "papermill>=2.4.0"
 ]
