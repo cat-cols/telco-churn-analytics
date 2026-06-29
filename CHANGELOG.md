@@ -29,6 +29,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Consolidated all generated artifacts into `outputs/` (removed the `results/` scratch
+  directory). Notebooks, `src/run_pipeline.py`, and scripts now all target the same
+  output directory.
+- Removed the stale `requirements.txt` reference from `docs/setup.md` and made
+  `pyproject.toml` the single source of truth for dependencies. Install is now
+  `pip install -e .` (core) or `pip install -e ".[dev]"` (development).
+- Added `docker-compose.yml` for containerised API deployment.
+- Added `black` to the `[dev]` extras and updated `.github/workflows/ci.yml` to lint
+  with Python 3.12, install project dev dependencies, and use the same 88-character
+  line length as the project flake8 config.
+- Updated `TODO.md` to reflect completed SQL layer, business-impact quantification,
+  Docker compose, and CI items.
+
 - `validate_input_data` now coerces validation columns to numeric before range-checking,
   making it safe to call on raw CSV input before preprocessing.
 - `OneHotEncoder` in `preprocess.py` now trained with `handle_unknown='ignore'`; existing

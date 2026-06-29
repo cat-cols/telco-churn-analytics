@@ -191,7 +191,7 @@ every feature a signed contribution (in log-odds) to each individual prediction;
 are additive and sum to the model output. We use `TreeExplainer`, the exact algorithm for tree
 ensembles.
 
-**Outputs saved to `results/`:**
+**Outputs saved to `outputs/`:**
 - `shap_feature_importance.png` — global importance ranked by mean |SHAP|.
 - `shap_summary.png` — beeswarm plot showing magnitude *and* direction of each feature's impact.
 

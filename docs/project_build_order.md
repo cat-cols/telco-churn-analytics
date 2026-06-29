@@ -104,8 +104,8 @@ Running the pipeline produces:
 
 | # | File | Status | Purpose |
 |---|---|---|---|
-| 31 | `results/test_predictions.csv` | ✅ | Churn predictions on full dataset |
-| 32 | `results/test_predictions_summary.txt` | ✅ | Plain-text prediction summary |
+| 31 | `outputs/test_predictions.csv` | ✅ | Churn predictions on full dataset |
+| 32 | `outputs/test_predictions_summary.txt` | ✅ | Plain-text prediction summary |
 
 ---
 
@@ -127,9 +127,9 @@ Write tests after the pipeline is stable so you know what behaviour to lock in.
 | # | File | Status | Purpose |
 |---|---|---|---|
 | 37 | `notebooks/04_results.ipynb` | ⬜ | Final metrics, confusion matrix, ROC curve, SHAP plots |
-| 38 | `results/confusion_matrix.png` | ⬜ | Confusion matrix for best model |
-| 39 | `results/roc_curve.png` | ⬜ | ROC curve for all models |
-| 40 | `results/shap_summary.png` | ⬜ | SHAP feature importance plot |
+| 38 | `outputs/confusion_matrix.png` | ⬜ | Confusion matrix for best model |
+| 39 | `outputs/roc_curve.png` | ⬜ | ROC curve for all models |
+| 40 | `outputs/shap_summary.png` | ⬜ | SHAP feature importance plot |
 | 41 | `docs/model_evaluation.md` | ✅ | Model evaluation framework and metric explanations |
 | 42 | `docs/executive_walkthrough.md` | ✅ | Non-technical summary for business stakeholders |
 

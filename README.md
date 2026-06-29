@@ -52,7 +52,7 @@ Our **statistical analysis** reveals:
 - **~49% precision** at that threshold (65% precision at the default 0.50)
 - **Statistically significant findings** across customer segments
 
-![Analysis Results](results/model_performance_dashboard.png)
+![Analysis Results](outputs/model_performance_dashboard.png)
 
 ## 🏗️ Technical Overview
 
@@ -69,7 +69,7 @@ This data analysis project uses the IBM Telco Customer Churn dataset (7,043 cust
 
 ```
 telco-churn-analytics/
-├── 📊 results/                     # Business insights & visualizations
+├── 📊 outputs/                     # Business insights & visualizations
 │   ├── model_performance_dashboard.png  # Key performance metrics
 │   ├── shap_*.png                  # Feature importance analysis
 │   ├── confusion_matrix.png        # Prediction accuracy
@@ -158,7 +158,7 @@ python3 scripts/threshold_analysis.py
 
 ### For Business Teams:
 - **Read**: `docs/business_summary.md` - Non-technical insights and recommendations
-- **View**: `results/` folder - Visualizations and performance charts
+- **View**: `outputs/` folder - Visualizations and performance charts
 - **Use**: API service - Integrate with your retention systems
 
 ### For Technical Teams:
@@ -168,22 +168,22 @@ python3 scripts/threshold_analysis.py
 
 ## 📊 Key Visualizations
 
-![Model Performance Dashboard](results/model_performance_dashboard.png)
+![Model Performance Dashboard](outputs/model_performance_dashboard.png)
 *Comprehensive model comparison across all metrics*
 
-![SHAP Feature Importance](results/shap_feature_importance.png)
+![SHAP Feature Importance](outputs/shap_feature_importance.png)
 *Top churn drivers: Month-to-month contracts, tenure, lack of support services*
 
-![Interactive 3D Segmentation](results/interactive_3d_segmentation.html)
+![Interactive 3D Segmentation](outputs/interactive_3d_segmentation.html)
 *Customer risk segments in 3D space - explore interactively*
 
-![Model Performance](results/model_radar_chart.png)
+![Model Performance](outputs/model_radar_chart.png)
 *Model comparison across key metrics*
 
-![Risk Distribution](results/probability_distribution.png)
+![Risk Distribution](outputs/probability_distribution.png)
 *Customer risk segmentation*
 
-![Feature Correlations](results/correlation_heatmap.png)
+![Feature Correlations](outputs/correlation_heatmap.png)
 *Relationships between customer features and churn patterns*
 
 ## 🧪 Testing & Quality
@@ -216,7 +216,7 @@ python3 scripts/interactive_threshold.py
 python3 scripts/analyze_class_balance.py
 
 # Comprehensive threshold sweep analysis
-python3 scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
+python3 scripts/threshold_analysis.py --step 0.02 --output outputs/threshold_sweep.csv
 ```
 
 ### SQL Analysis Layer
@@ -227,7 +227,7 @@ pip install -e ".[sql]"
 # Print all query results
 python3 scripts/sql_analysis.py
 
-# Export each result to results/sql/<name>.csv
+# Export each result to outputs/sql/<name>.csv
 python3 scripts/sql_analysis.py --save
 
 # Run a single named query
@@ -239,13 +239,13 @@ Queries live in `sql/churn_analysis.sql` and cover churn rates by contract, paym
 Explore customer segments interactively in your browser:
 ```bash
 # Open interactive 3D visualization
-open results/interactive_3d_segmentation.html
+open outputs/interactive_3d_segmentation.html
 ```
 
 ### Custom Threshold Tuning
 ```bash
 # Fine-grained threshold analysis
-python3 scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
+python3 scripts/threshold_analysis.py --step 0.02 --output outputs/threshold_sweep.csv
 ```
 
 ### Individual Pipeline Stages
@@ -348,6 +348,7 @@ uvicorn src.api:app --host 0.0.0.0 --port 8000
 - Health monitoring
 
 ### 2. **Docker** (Containerized API)
+
 ```bash
 # Build the image (bundles the trained model + preprocessors)
 docker build -t telco-churn-api .
@@ -355,12 +356,16 @@ docker build -t telco-churn-api .
 # Run the service
 docker run --rm -p 8000:8000 telco-churn-api
 
+# Or use docker-compose
+docker compose up --build
+
 # Verify it's healthy, then explore docs at http://localhost:8000/docs
 curl http://localhost:8000/health
 ```
 - Self-contained, reproducible runtime
 - Built-in `HEALTHCHECK` against `/health`
 - Lean image (serving dependencies only)
+- `docker-compose.yml` included for one-command deployment
 
 ### 3. **Batch Processing**
 ```bash

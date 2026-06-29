@@ -67,12 +67,12 @@ All tracked files in the repository, excluding `.venv/`, `__pycache__/`, and `.g
 
 ---
 
-## `results/` — Pipeline Outputs (gitignored)
+## `outputs/` — Pipeline Outputs (gitignored)
 
 | File | Description |
 |---|---|
-| `results/test_predictions.csv` | Churn predictions on raw dataset (7,043 rows) |
-| `results/test_predictions_summary.txt` | Plain-text summary: churn rate, risk distribution |
+| `outputs/test_predictions.csv` | Churn predictions on raw dataset (7,043 rows) |
+| `outputs/test_predictions_summary.txt` | Plain-text summary: churn rate, risk distribution |
 
 ---
 

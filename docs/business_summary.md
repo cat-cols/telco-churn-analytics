@@ -115,7 +115,7 @@ setting. Full guidance is in `usage.md`.
 
 ## Where the supporting detail lives
 
-- **Charts** (risk breakdowns, model performance): the `results/` folder, e.g.
+- **Charts** (risk breakdowns, model performance): the `outputs/` folder, e.g.
   `confusion_matrix.png`, `roc_curve.png`, `shap_summary.png`.
 - **Detailed findings**: `docs/findings.md`.
 - **How predictions are produced and tuned**: `docs/usage.md`.

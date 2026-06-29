@@ -173,7 +173,7 @@ sns.histplot(data=df, x='tenure', hue='Churn', multiple='stack')
 
 1. **Review the full analysis** in `BUSINESS_ANALYSIS.md`
 2. **Examine the code** in `notebooks/` for technical depth
-3. **Check the visualizations** in `results/` for communication skills
+3. **Check the visualizations** in `outputs/` for communication skills
 4. **Contact me** to discuss similar business challenges
 
 ---

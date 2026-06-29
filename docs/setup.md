@@ -1,7 +1,7 @@
 # Setup Guide
 
 ## Prerequisites
-- Python 3.8 or higher (developed and tested on Python 3.12)
+- Python 3.11 or higher (developed and tested on Python 3.12)
 - Git (for cloning the repository)
 - Virtual environment tool (venv or conda)
 
@@ -27,12 +27,14 @@ conda activate telco-churn
 ```
 
 ### 3. Install Dependencies
-The recommended way to install everything is from `requirements.txt`:
+
+Install the project in editable mode from `pyproject.toml`:
+
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
-This installs the project's dependencies (versions pinned in `requirements.txt`):
+This installs the core runtime dependencies (versions pinned in `pyproject.toml`):
 
 | Package | Purpose |
 |---------|---------|
@@ -42,13 +44,17 @@ This installs the project's dependencies (versions pinned in `requirements.txt`)
 | `matplotlib`, `seaborn` | Visualization |
 | `shap` | Model interpretability (SHAP analysis in `04_results.ipynb`) |
 | `jupyter`, `ipykernel` | Running the notebooks |
+| `fastapi`, `uvicorn` | Prediction API |
 
-**Optional extras** (commented out in `requirements.txt`; install only if needed):
-- `xgboost`, `lightgbm` — additional gradient-boosting models in the comparison.
-- `imbalanced-learn` — the SMOTE benchmark in `03_modeling.ipynb`.
+**Optional extras** (install only if needed):
 
 ```bash
-pip install xgboost lightgbm imbalanced-learn   # optional
+pip install -e ".[dev]"       # pytest, flake8, black, bandit
+pip install -e ".[advanced]"  # xgboost, lightgbm
+pip install -e ".[imbalance]" # imbalanced-learn (SMOTE)
+pip install -e ".[interactive]" # plotly
+pip install -e ".[sql]"        # duckdb
+pip install -e ".[pipeline]"   # papermill (automated notebook execution)
 ```
 
 > Note: `kagglehub`/`kaggle` are **not** project dependencies. They are only needed if
@@ -106,11 +112,10 @@ telco-churn-analytics/
 ├── models/               # Trained model artifacts (.pkl) + comparison CSV
 ├── notebooks/            # Jupyter notebooks (01_eda → 04_results)
 ├── notes/                # In-depth learning/reference guides
-├── results/              # Generated plots, reports, predictions
+├── outputs/              # Generated plots, reports, predictions
 ├── scripts/              # Standalone analysis scripts (e.g. threshold_analysis.py)
 ├── src/                  # Pipeline source (preprocess, train, predict, config)
 ├── tests/                # Pytest unit & integration tests
-├── requirements.txt      # Python dependencies
 └── README.md             # Project overview
 ```
 

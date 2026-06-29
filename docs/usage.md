@@ -110,7 +110,7 @@ predictions = model.predict(X_test)
 Once the model and preprocessors are trained, score new customers from a raw CSV:
 
 ```bash
-python3 src/predict.py --input data/new_customers.csv --output results/predictions.csv
+python3 src/predict.py --input data/new_customers.csv --output outputs/predictions.csv
 ```
 
 Key options:
@@ -158,7 +158,7 @@ Example — run a recall-oriented batch at threshold 0.30:
 
 ```bash
 python3 src/predict.py --input data/new_customers.csv \
-    --output results/predictions.csv --threshold 0.30
+    --output outputs/predictions.csv --threshold 0.30
 ```
 
 ### Re-deriving the thresholds for your model
@@ -170,7 +170,7 @@ precision/recall/F1 sweep (and the key operating points) against the current
 ```bash
 python3 scripts/threshold_analysis.py                 # prints sweep + key points
 python3 scripts/threshold_analysis.py --step 0.02 \
-    --output results/threshold_sweep.csv              # finer sweep, saved to CSV
+    --output outputs/threshold_sweep.csv              # finer sweep, saved to CSV
 ```
 
 The script reports the default (0.50), the F1-maximizing threshold, and the
