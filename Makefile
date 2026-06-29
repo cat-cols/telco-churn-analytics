@@ -56,9 +56,10 @@ clean:
 	@echo "🧹 Cleaning generated files..."
 	@find . -name "*.executed.ipynb" -delete
 	@rm -rf data/processed/*.parquet
+	@rm -rf data/processed/*.pkl
 	@rm -rf models/*.pkl
-	@rm -rf results/*.html
-	@rm -rf results/*.png
+	@rm -rf models/*.csv
+	@find outputs/ -type f ! -name ".gitkeep" -delete
 	@echo "✅ Clean complete"
 
 # Quick status check
@@ -71,5 +72,5 @@ status:
 	@echo "Model files:"
 	@ls -la models/ 2>/dev/null || echo "  No model files"
 	@echo ""
-	@echo "Result files:"
-	@ls -la results/ 2>/dev/null || echo "  No result files"
+	@echo "Output files:"
+	@ls -la outputs/ 2>/dev/null || echo "  No output files"

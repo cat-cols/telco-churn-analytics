@@ -11,12 +11,12 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 MODELS_DIR = PROJECT_ROOT / "models"
-RESULTS_DIR = PROJECT_ROOT / "results"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
 # Ensure directories exist
 PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Data configuration
 DATA_PATH = RAW_DATA_DIR / "telco_customer_churn.csv"

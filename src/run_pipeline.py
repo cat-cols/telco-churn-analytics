@@ -15,7 +15,7 @@ from config import (
     RESULTS_FILE,
     PROCESSED_DATA_DIR,
     IDENTIFIER_COLUMN,
-    RESULTS_DIR,
+    OUTPUTS_DIR,
 )
 
 logging.basicConfig(
@@ -72,8 +72,8 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     )
 
     # Save predictions
-    predictions_df.to_csv(RESULTS_DIR / "test_predictions.csv", index=False)
-    logger.info(f"✓ Predictions saved to {RESULTS_DIR / 'test_predictions.csv'}")
+    predictions_df.to_csv(OUTPUTS_DIR / "test_predictions.csv", index=False)
+    logger.info(f"✓ Predictions saved to {OUTPUTS_DIR / 'test_predictions.csv'}")
 
     # Print summary
     logger.info("\n" + "=" * 60)
@@ -89,8 +89,8 @@ def run_full_pipeline(skip_preprocessing: bool = False, skip_training: bool = Fa
     logger.info("\nGenerated Files:")
     logger.info(f"  - Processed data: {PROCESSED_DATA_DIR}")
     logger.info(f"  - Trained models: {MODELS_DIR}")
-    logger.info(f"  - Results: {RESULTS_DIR / 'test_predictions.csv'}")
-    logger.info(f"  - Model comparison: {RESULTS_DIR / 'model_comparison_results.csv'}")
+    logger.info(f"  - Outputs: {OUTPUTS_DIR / 'test_predictions.csv'}")
+    logger.info(f"  - Model comparison: {MODELS_DIR / 'model_comparison_results.csv'}")
 
     return best_model, results_df, predictions_df
 

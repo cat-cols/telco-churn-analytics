@@ -6,8 +6,8 @@ and prints a summary table.  Optionally saves a CSV of the full sweep.
 
 Usage:
     python scripts/threshold_analysis.py
-    python scripts/threshold_analysis.py --output results/threshold_sweep.csv
-    python scripts/threshold_analysis.py --step 0.02 --output results/threshold_sweep.csv
+    python scripts/threshold_analysis.py --output outputs/threshold_sweep.csv
+    python scripts/threshold_analysis.py --step 0.02 --output outputs/threshold_sweep.csv
 """
 
 import argparse

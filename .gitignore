@@ -94,9 +94,8 @@ models/*.pth
 # ============================================================
 # Results and outputs
 # ============================================================
-results/*
-!results/.gitkeep
-outputs/
+outputs/*
+!outputs/.gitkeep
 logs/
 *.log
 

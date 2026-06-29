@@ -3,7 +3,7 @@
 This executes the queries in ``sql/churn_analysis.sql`` over an in-memory
 DuckDB view built directly from ``data/raw/telco_customer_churn.csv`` — no
 database server required. Each query result is printed and, optionally, written
-to ``results/sql/<name>.csv``.
+to ``outputs/sql/<name>.csv``.
 
 Usage:
     python3 scripts/sql_analysis.py                 # print all query results
@@ -23,7 +23,7 @@ import duckdb
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SQL_FILE = PROJECT_ROOT / "sql" / "churn_analysis.sql"
 DATA_FILE = PROJECT_ROOT / "data" / "raw" / "telco_customer_churn.csv"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "sql"
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "sql"
 
 # Matches a "-- name: <identifier>" header that precedes each query.
 NAME_HEADER = re.compile(r"^--\s*name:\s*(\w+)\s*$", re.MULTILINE)
@@ -60,7 +60,7 @@ def parse_named_queries(sql_text: str) -> List[Tuple[str, str]]:
 def run() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--save", action="store_true", help="export each result to results/sql/<name>.csv"
+        "--save", action="store_true", help="export each result to outputs/sql/<name>.csv"
     )
     parser.add_argument(
         "--query", help="run only the query with this name (default: run all)"

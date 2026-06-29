@@ -185,9 +185,9 @@ def run_pipeline(
         # List generated files
         data_dir = project_root / "data"
         models_dir = project_root / "models"
-        results_dir = project_root / "results"
+        outputs_dir = project_root / "outputs"
 
-        for directory in [data_dir, models_dir, results_dir]:
+        for directory in [data_dir, models_dir, outputs_dir]:
             if directory.exists():
                 files = list(directory.rglob("*"))
                 print(f"   {directory.name}: {len(files)} files")

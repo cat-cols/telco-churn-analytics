@@ -6,7 +6,7 @@ and basic dataset info.  Optionally saves a CSV of the class distribution.
 
 Usage:
     python scripts/analyze_class_balance.py
-    python scripts/analyze_class_balance.py --output results/class_balance.csv
+    python scripts/analyze_class_balance.py --output outputs/class_balance.csv
 """
 
 import argparse
